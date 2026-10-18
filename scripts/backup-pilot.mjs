@@ -70,9 +70,17 @@ try {
   throw error;
 } finally {
   try {
-    if (restart.includes('redis')) run('docker', [...compose, 'start', '--wait', 'redis']);
+    // Bring back only the services that were running. Compose v2 start --wait
+    // can include stopped project services in its health wait; up --no-deps
+    // scopes readiness to this batch and does not rerun migrations.
+    phase = 'restart-redis';
+    if (restart.includes('redis')) run('docker', [...compose, 'up', '-d', '--no-build', '--no-deps', '--wait', 'redis']);
     const apps = restart.filter(s => s !== 'redis');
-    if (apps.length) run('docker', [...compose, 'start', '--wait', ...apps]);
+    phase = 'restart-applications';
+    if (apps.length) run('docker', [...compose, 'up', '-d', '--no-build', '--no-deps', '--wait', ...apps]);
+  } catch (error) {
+    console.error(`backup-phase: ${phase}`);
+    throw error;
   } finally {
     rmSync(temporary, { recursive: true, force: true });
     if (output) rmSync(output, { force: true });
