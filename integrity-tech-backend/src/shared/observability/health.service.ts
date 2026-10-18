@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
+import { queueRedisOptions } from '../security/redis.config';
 import { access, mkdir } from 'fs/promises';
 import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import { PrismaService } from '../database/prisma.service';
@@ -74,9 +75,7 @@ export class HealthService {
   private async checkRedis(): Promise<DependencyCheck> {
     const started = Date.now();
     const redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: Number(process.env.REDIS_PORT || 6379),
-      password: process.env.REDIS_PASSWORD || undefined,
+      ...queueRedisOptions(),
       lazyConnect: true,
       maxRetriesPerRequest: 1,
       connectTimeout: 1000,

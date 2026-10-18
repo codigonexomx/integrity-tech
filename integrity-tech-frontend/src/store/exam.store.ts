@@ -111,15 +111,15 @@ export const useExamStore = create<ExamState>()(
       focusLossCount: 0,
       showProctoringWarning: false,
 
-      startExam: (attemptId, examId) => set({
+      startExam: (attemptId, examId) => set(state => ({
         attemptId,
         examId,
-        answers: {},
-        flaggedQuestions: {},
+        answers: state.attemptId === attemptId ? state.answers : {},
+        flaggedQuestions: state.attemptId === attemptId ? state.flaggedQuestions : {},
         status: 'IN_PROGRESS',
         focusLossCount: 0,
         showProctoringWarning: false,
-      }),
+      })),
 
       setAnswer: (questionId, response) => set((state) => ({
         answers: {

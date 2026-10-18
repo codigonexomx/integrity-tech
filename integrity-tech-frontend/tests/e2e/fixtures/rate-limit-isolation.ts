@@ -1,4 +1,3 @@
-import { test } from '@playwright/test';
 import net from 'node:net';
 
 type RedisConnection = {
@@ -103,7 +102,7 @@ async function sendRedisCommand(socket: net.Socket, parts: string[]): Promise<un
       socket.off('error', onError);
     };
 
-    socket.once('data', onData);
+    socket.on('data', onData);
     socket.once('error', onError);
     socket.write(encodeCommand(parts));
   });
@@ -142,7 +141,3 @@ export async function clearE2ERateLimitKeys() {
     socket.end();
   }
 }
-
-test.beforeEach(async () => {
-  await clearE2ERateLimitKeys();
-});

@@ -21,6 +21,7 @@ async function bootstrap() {
   const logger = app.get(StructuredLoggerService);
   app.useLogger(logger);
   
+  app.enableShutdownHooks();
   app.disable('x-powered-by');
   app.use(helmet({
     frameguard: { action: 'deny' },
@@ -28,6 +29,7 @@ async function bootstrap() {
     crossOriginResourcePolicy: { policy: 'same-site' },
   }));
   app.use((req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, private');
     res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
     next();
   });

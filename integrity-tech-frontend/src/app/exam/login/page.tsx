@@ -13,7 +13,7 @@ import type {
 
 function getCandidateAccessErrorMessage(status: number, fallback: string) {
   const messages: Record<number, string> = {
-    400: 'La clave de acceso no tiene un formato válido.',
+    400: 'La clave no está disponible: verifica que sea correcta, siga vigente y no haya sido utilizada.',
     401: 'La sesión no es válida. Vuelve a intentar desde tu enlace de evaluación.',
     403: 'No tienes autorización para acceder a esta evaluación.',
     409: 'La invitación ya no está disponible para iniciar un nuevo intento.',
@@ -102,7 +102,7 @@ function CandidateLoginForm() {
       const data = await apiClient.post<ClaimInvitationResponse>('/evaluations/invitations/claim', payload, { auth: false });
       
       // Guardar el Token de Sesión JWT en localStorage para el header
-      localStorage.setItem('auth-token', data.token);
+      localStorage.setItem(`candidate-token:${data.attemptId}`, data.token);
 
       // Redirigir al examen del alumno
       router.push(`/exam/${data.attemptId}`);
@@ -135,7 +135,7 @@ function CandidateLoginForm() {
           </h2>
         </div>
         <p className="text-2xs text-slate-400 max-w-xs leading-relaxed mt-1">
-          Acceso seguro a evaluaciones psicométricas bajo supervisión forense de conducta.
+          Acceso a las prácticas técnicas del piloto. No determinan aptitud laboral.
         </p>
       </div>
 
@@ -249,8 +249,8 @@ function CandidateLoginForm() {
 
       {/* METADATOS TÉCNICOS */}
       <div className="text-4xs text-slate-600 font-mono flex flex-col gap-0.5 leading-relaxed">
-        <div>Servicio de Autenticación mediante Claves Criptográficas de Un Solo Uso (OTP)</div>
-        <div>Session Binding: IP e Identidad en Proctoring Forense</div>
+        <div>Acceso mediante clave de un solo uso</div>
+        <div>Piloto de práctica · sin cámara ni monitoreo de navegación</div>
       </div>
 
     </div>

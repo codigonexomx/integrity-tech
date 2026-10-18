@@ -124,6 +124,8 @@ export class AuthController {
         email: user.email,
         organizationId: user.organizationId,
         organizationSlug: user.organization.slug,
+        organizationName: user.organization.name,
+        permissions,
         roles,
       },
     };

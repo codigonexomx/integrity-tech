@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-10-17T22:43:23.578Z",
+  "fictionalDataOnly": true,
+  "sourceProject": "integrity-recovery-source-1792276940421",
+  "targetProject": "integrity-restore-drill-1792276940421",
+  "checks": {
+    "fullCandidateFlowBeforeBackup": true,
+    "authenticatedEncryptedBackup": true,
+    "tamperedBackupRejected": true,
+    "restoredDatabaseReportAndDateMatch": true,
+    "restoredPrivateFileBytesMatch": true,
+    "restoredRedisValueMatches": true,
+    "loginThroughVerifiedLocalHTTPS": true,
+    "existingDestinationRefused": true
+  },
+  "elapsedMs": 63158,
+  "backupAndRecoveryMs": 44519,
+  "recoveryAndChecksMs": 24441,
+  "scope": "local_isolated_not_remote_acceptance"
+}

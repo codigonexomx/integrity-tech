@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { ServiceUnavailableException, Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { PERMISSIONS, Permissions, PermissionsGuard } from '../../iam';
@@ -30,7 +30,7 @@ export class ReportsController {
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @Permissions(PERMISSIONS.REPORTS_READ)
   getAttemptResultados(@Req() req: any, @Param('attemptId', ParseUUIDPipe) attemptId: string) {
-    return this.reportService.getAttemptResultados(attemptId, req.user.organizationId);
+    throw new ServiceUnavailableException('IGA y recomendaciones automáticas no disponibles durante el piloto.');
   }
 
   @ApiOperation({ summary: 'Forzar recálculo del Índice IGA asignando un perfil de puesto' })
@@ -44,7 +44,7 @@ export class ReportsController {
     @Param('attemptId', ParseUUIDPipe) attemptId: string,
     @Body() body: RecalcularIgaDto,
   ) {
-    return this.reportService.recalcularIga(attemptId, req.user, body, this.extractRequestMetadata(req));
+    throw new ServiceUnavailableException('IGA y recomendaciones automáticas no disponibles durante el piloto.');
   }
 
   @ApiOperation({ summary: 'Obtener la lista de todos los perfiles de puesto configurados' })

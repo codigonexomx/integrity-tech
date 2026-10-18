@@ -6,6 +6,7 @@ import {
   INTEGRITY_LABORAL_ITEMS,
   INTEGRITY_LABORAL_LIKERT_OPTIONS,
   INTEGRITY_LABORAL_MODEL,
+  INTEGRITY_LABORAL_SCORING_REVISION,
   likertWeights,
 } from '../src/modules/evaluations/integrity-laboral/integrity-laboral.definition';
 
@@ -38,13 +39,13 @@ async function ensureTaxonomy(organizationId: string) {
     where: { organizationId_code: { organizationId, code: 'INTEGRIDAD_LABORAL' } },
     update: {
       name: 'Integridad Laboral',
-      description: 'Reactivos oficiales de integridad laboral basados en Honestidad-Humildad.',
+      description: 'Reactivos experimentales de integridad laboral basados en Honestidad-Humildad.',
     },
     create: {
       organizationId,
       code: 'INTEGRIDAD_LABORAL',
       name: 'Integridad Laboral',
-      description: 'Reactivos oficiales de integridad laboral basados en Honestidad-Humildad.',
+      description: 'Reactivos experimentales de integridad laboral basados en Honestidad-Humildad.',
     },
   });
 
@@ -62,13 +63,13 @@ async function ensureTaxonomy(organizationId: string) {
     where: { organizationId_code: { organizationId, code: 'HONESTIDAD_HUMILDAD' } },
     update: {
       name: 'Honestidad-Humildad',
-      description: 'Factor H del modelo HEXACO de Lee & Ashton.',
+      description: 'Factor H del modelo referente teórico HEXACO de Lee & Ashton; instrumento propio no validado.',
     },
     create: {
       organizationId,
       code: 'HONESTIDAD_HUMILDAD',
       name: 'Honestidad-Humildad',
-      description: 'Factor H del modelo HEXACO de Lee & Ashton.',
+      description: 'Factor H del modelo referente teórico HEXACO de Lee & Ashton; instrumento propio no validado.',
     },
   });
 
@@ -91,7 +92,7 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
     where: { organizationId_code: { organizationId, code: INTEGRITY_LABORAL_ASSESSMENT_CODE } },
     update: {
       name: 'Evaluación de Integridad Laboral',
-      description: 'Evaluación oficial basada en el factor Honestidad-Humildad (H) del modelo HEXACO de Lee & Ashton.',
+      description: 'Evaluación experimental basada en el factor Honestidad-Humildad (H) del modelo referente teórico HEXACO de Lee & Ashton; instrumento propio no validado.',
       status: 'PUBLISHED',
       createdByUserId: adminId,
     },
@@ -99,14 +100,16 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
       organizationId,
       code: INTEGRITY_LABORAL_ASSESSMENT_CODE,
       name: 'Evaluación de Integridad Laboral',
-      description: 'Evaluación oficial basada en el factor Honestidad-Humildad (H) del modelo HEXACO de Lee & Ashton.',
+      description: 'Evaluación experimental basada en el factor Honestidad-Humildad (H) del modelo referente teórico HEXACO de Lee & Ashton; instrumento propio no validado.',
       status: 'PUBLISHED',
       createdByUserId: adminId,
     },
   });
 
   const blueprintJson = {
-    source: 'official_seed',
+    source: 'experimental_seed',
+    scoringRevision: INTEGRITY_LABORAL_SCORING_REVISION,
+    validationStatus: 'EXPERIMENTAL',
     assessmentCode: INTEGRITY_LABORAL_ASSESSMENT_CODE,
     title: 'Evaluación de Integridad Laboral',
     scientificModel: INTEGRITY_LABORAL_MODEL,
@@ -117,25 +120,15 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
   };
 
   const assessmentVersion = await (prisma as any).assessmentVersion.upsert({
-    where: { assessmentId_version: { assessmentId: assessment.id, version: '1.0.0' } },
-    update: {
-      organizationId,
-      status: 'PUBLISHED',
-      title: 'Evaluación de Integridad Laboral',
-      description: 'Primera versión oficial de la evaluación de integridad laboral.',
-      blueprintJson,
-      contentHash: hashPayload(blueprintJson),
-      publishedAt: new Date(),
-      createdByUserId: adminId,
-      approvedByUserId: adminId,
-    },
+    where: { assessmentId_version: { assessmentId: assessment.id, version: INTEGRITY_LABORAL_SCORING_REVISION } },
+    update: {},
     create: {
       assessmentId: assessment.id,
       organizationId,
-      version: '1.0.0',
+      version: INTEGRITY_LABORAL_SCORING_REVISION,
       status: 'PUBLISHED',
       title: 'Evaluación de Integridad Laboral',
-      description: 'Primera versión oficial de la evaluación de integridad laboral.',
+      description: 'Primera versión experimental de la evaluación de integridad laboral.',
       blueprintJson,
       contentHash: hashPayload(blueprintJson),
       publishedAt: new Date(),
@@ -187,6 +180,7 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
     };
     const scoringKeyJson = {
       scoring: 'LIKERT_SUM',
+      scoringRevision: INTEGRITY_LABORAL_SCORING_REVISION,
       assessmentCode: INTEGRITY_LABORAL_ASSESSMENT_CODE,
       dimensionKey: itemDefinition.dimensionKey,
       dimension: dimension.name,
@@ -195,29 +189,16 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
     };
 
     const itemVersion = await (prisma as any).itemVersion.upsert({
-      where: { itemId_version: { itemId: item.id, version: '1.0.0' } },
-      update: {
-        status: 'PUBLISHED',
-        language: 'es',
-        stemJson,
-        scoringKeyJson,
-        tags: { assessmentCode: INTEGRITY_LABORAL_ASSESSMENT_CODE, dimension: dimension.name, official: true },
-        difficulty: null,
-        discrimination: null,
-        expectedTimeSeconds: 45,
-        contentHash: hashPayload({ stemJson, scoringKeyJson }),
-        publishedAt: new Date(),
-        createdByUserId: adminId,
-        approvedByUserId: adminId,
-      },
+      where: { itemId_version: { itemId: item.id, version: INTEGRITY_LABORAL_SCORING_REVISION } },
+      update: {},
       create: {
         itemId: item.id,
-        version: '1.0.0',
+        version: INTEGRITY_LABORAL_SCORING_REVISION,
         status: 'PUBLISHED',
         language: 'es',
         stemJson,
         scoringKeyJson,
-        tags: { assessmentCode: INTEGRITY_LABORAL_ASSESSMENT_CODE, dimension: dimension.name, official: true },
+        tags: { assessmentCode: INTEGRITY_LABORAL_ASSESSMENT_CODE, dimension: dimension.name, experimental: true },
         difficulty: null,
         discrimination: null,
         expectedTimeSeconds: 45,
@@ -251,7 +232,7 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
     update: {
       organizationId,
       title: 'Evaluación de Integridad Laboral',
-      description: 'Evaluación oficial de integridad laboral basada en Honestidad-Humildad (HEXACO).',
+      description: 'Evaluación experimental de integridad laboral basada en Honestidad-Humildad (HEXACO).',
       durationMinutes: 20,
       isPublished: true,
       createdBy: adminId,
@@ -260,7 +241,7 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
       id: assessment.id,
       organizationId,
       title: 'Evaluación de Integridad Laboral',
-      description: 'Evaluación oficial de integridad laboral basada en Honestidad-Humildad (HEXACO).',
+      description: 'Evaluación experimental de integridad laboral basada en Honestidad-Humildad (HEXACO).',
       durationMinutes: 20,
       isPublished: true,
       createdBy: adminId,
@@ -268,7 +249,7 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
   });
 
   const scoringModel = await (prisma as any).scoringModel.upsert({
-    where: { organizationId_code: { organizationId, code: `${INTEGRITY_LABORAL_ASSESSMENT_CODE}_SCORING` } },
+    where: { organizationId_code: { organizationId, code: `${INTEGRITY_LABORAL_ASSESSMENT_CODE}_SCORING_${INTEGRITY_LABORAL_SCORING_REVISION}` } },
     update: {
       assessmentVersionId: assessmentVersion.id,
       name: 'Scoring sumatorio Integridad Laboral',
@@ -277,30 +258,22 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
     create: {
       organizationId,
       assessmentVersionId: assessmentVersion.id,
-      code: `${INTEGRITY_LABORAL_ASSESSMENT_CODE}_SCORING`,
+      code: `${INTEGRITY_LABORAL_ASSESSMENT_CODE}_SCORING_${INTEGRITY_LABORAL_SCORING_REVISION}`,
       name: 'Scoring sumatorio Integridad Laboral',
       modelType: 'LIKERT_SUM_BY_DIMENSION',
     },
   });
 
   await (prisma as any).scoringModelVersion.upsert({
-    where: { scoringModelId_version: { scoringModelId: scoringModel.id, version: '1.0.0' } },
-    update: {
-      status: 'PUBLISHED',
-      algorithmKey: 'integrity-laboral-likert-sum',
-      parametersJson: { usesNorms: false, usesPercentiles: false, dimensions: INTEGRITY_LABORAL_DIMENSIONS },
-      contentHash: hashPayload({ scoring: INTEGRITY_LABORAL_ASSESSMENT_CODE, version: '1.0.0' }),
-      effectiveFrom: new Date(),
-      createdByUserId: adminId,
-      approvedByUserId: adminId,
-    },
+    where: { scoringModelId_version: { scoringModelId: scoringModel.id, version: INTEGRITY_LABORAL_SCORING_REVISION } },
+    update: {},
     create: {
       scoringModelId: scoringModel.id,
-      version: '1.0.0',
+      version: INTEGRITY_LABORAL_SCORING_REVISION,
       status: 'PUBLISHED',
       algorithmKey: 'integrity-laboral-likert-sum',
       parametersJson: { usesNorms: false, usesPercentiles: false, dimensions: INTEGRITY_LABORAL_DIMENSIONS },
-      contentHash: hashPayload({ scoring: INTEGRITY_LABORAL_ASSESSMENT_CODE, version: '1.0.0' }),
+      contentHash: hashPayload({ scoring: INTEGRITY_LABORAL_ASSESSMENT_CODE, version: INTEGRITY_LABORAL_SCORING_REVISION }),
       effectiveFrom: new Date(),
       createdByUserId: adminId,
       approvedByUserId: adminId,
@@ -308,7 +281,7 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
   });
 
   const reportTemplate = await (prisma as any).reportTemplate.upsert({
-    where: { organizationId_code: { organizationId, code: `${INTEGRITY_LABORAL_ASSESSMENT_CODE}_REPORT` } },
+    where: { organizationId_code: { organizationId, code: `${INTEGRITY_LABORAL_ASSESSMENT_CODE}_REPORT_${INTEGRITY_LABORAL_SCORING_REVISION}` } },
     update: {
       assessmentVersionId: assessmentVersion.id,
       name: 'Reporte Integridad Laboral',
@@ -316,27 +289,20 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
     create: {
       organizationId,
       assessmentVersionId: assessmentVersion.id,
-      code: `${INTEGRITY_LABORAL_ASSESSMENT_CODE}_REPORT`,
+      code: `${INTEGRITY_LABORAL_ASSESSMENT_CODE}_REPORT_${INTEGRITY_LABORAL_SCORING_REVISION}`,
       name: 'Reporte Integridad Laboral',
     },
   });
 
   await (prisma as any).reportTemplateVersion.upsert({
-    where: { reportTemplateId_version: { reportTemplateId: reportTemplate.id, version: '1.0.0' } },
-    update: {
-      status: 'PUBLISHED',
-      templateJson: { sections: ['integrity_laboral_profile'], usesNorms: false, usesPercentiles: false },
-      contentHash: hashPayload({ report: INTEGRITY_LABORAL_ASSESSMENT_CODE, version: '1.0.0' }),
-      effectiveFrom: new Date(),
-      createdByUserId: adminId,
-      approvedByUserId: adminId,
-    },
+    where: { reportTemplateId_version: { reportTemplateId: reportTemplate.id, version: INTEGRITY_LABORAL_SCORING_REVISION } },
+    update: {},
     create: {
       reportTemplateId: reportTemplate.id,
-      version: '1.0.0',
+      version: INTEGRITY_LABORAL_SCORING_REVISION,
       status: 'PUBLISHED',
       templateJson: { sections: ['integrity_laboral_profile'], usesNorms: false, usesPercentiles: false },
-      contentHash: hashPayload({ report: INTEGRITY_LABORAL_ASSESSMENT_CODE, version: '1.0.0' }),
+      contentHash: hashPayload({ report: INTEGRITY_LABORAL_ASSESSMENT_CODE, version: INTEGRITY_LABORAL_SCORING_REVISION }),
       effectiveFrom: new Date(),
       createdByUserId: adminId,
       approvedByUserId: adminId,
@@ -347,6 +313,7 @@ async function ensureOfficialIntegrityLaboralAssessment(organizationId: string, 
 }
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') throw new Error('Seed demo prohibido en producción. Usa npm run bootstrap:pilot.');
   const organization = await prisma.organization.upsert({
     where: { slug: 'integrity-demo' },
     update: {},

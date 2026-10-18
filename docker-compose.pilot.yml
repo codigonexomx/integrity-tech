@@ -1,0 +1,111 @@
+name: integrity-tech-pilot
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgresql://integrity:${POSTGRES_PASSWORD:?Run node scripts/setup-pilot.mjs}@postgres:5432/integrity_pilot?schema=public
+  REDIS_URL: redis://:${REDIS_PASSWORD:?Missing REDIS_PASSWORD}@redis:6379
+  REDIS_KEY_PREFIX: integrity-pilot
+  RATE_LIMIT_STORE: redis
+  RATE_LIMIT_REDIS_REQUIRED: "true"
+  JWT_SECRET: ${JWT_SECRET:?Missing JWT_SECRET}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Missing ENCRYPTION_KEY}
+  HMAC_SALT: ${HMAC_SALT:?Missing HMAC_SALT}
+  ACCESS_TOKEN_TTL_SECONDS: 3600
+  REFRESH_TOKEN_TTL_DAYS: 1
+  CORS_ORIGINS: ${PILOT_ORIGIN:-https://localhost:8443}
+  SHOW_SWAGGER: "false"
+  ENABLE_DEV_AUTH: "false"
+  API_BODY_LIMIT: 1mb
+  STORAGE_PROVIDER: local-private
+  STORAGE_LOCAL_PERSISTENT: "true"
+  STORAGE_LOCAL_PRIVATE_PATH: /app/.private-storage
+  STORAGE_SIGNED_URL_TTL_SECONDS: 300
+  STORAGE_MAX_FILE_BYTES: 2097152
+  OTEL_ENABLED: "false"
+  LOG_LEVEL: warn
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: integrity_pilot
+      POSTGRES_USER: integrity
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Missing POSTGRES_PASSWORD}
+    volumes: ["pilot_db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U integrity -d integrity_pilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Missing REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --appendfsync always --maxmemory-policy noeviction --requirepass \"$$REDIS_PASSWORD\""]
+    volumes: ["pilot_redis:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    image: integrity-tech-pilot-backend
+    build: {context: ./integrity-tech-backend}
+    environment: *app-env
+    command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  backend:
+    image: integrity-tech-pilot-backend
+    build: {context: ./integrity-tech-backend}
+    environment:
+      <<: *app-env
+      PORT: 3001
+    volumes: ["pilot_files:/app/.private-storage"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+    init: true
+
+  frontend:
+    image: integrity-tech-pilot-frontend
+    build:
+      context: ./integrity-tech-frontend
+      args:
+        BACKEND_URL: http://backend:3001
+        NEXT_PUBLIC_API_BASE_URL: ""
+        NEXT_PUBLIC_APP_ENV: pilot
+    environment:
+      BACKEND_URL: http://backend:3001
+      PORT: 3000
+    depends_on:
+      backend: {condition: service_healthy}
+    restart: unless-stopped
+    init: true
+
+  gateway:
+    image: integrity-tech-pilot-gateway
+    build: {context: ./deploy}
+    environment:
+      PILOT_DOMAIN: ${PILOT_DOMAIN:-localhost}
+    ports: ["${PILOT_BIND_IP:-127.0.0.1}:${PILOT_HTTP_PORT:-8080}:80", "${PILOT_BIND_IP:-127.0.0.1}:${PILOT_HTTPS_PORT:-8443}:443"]
+    volumes:
+      - pilot_tls:/data
+      - pilot_caddy_config:/config
+    depends_on:
+      frontend: {condition: service_started}
+    restart: unless-stopped
+
+volumes:
+  pilot_db:
+  pilot_redis:
+  pilot_files:
+  pilot_tls:
+  pilot_caddy_config:

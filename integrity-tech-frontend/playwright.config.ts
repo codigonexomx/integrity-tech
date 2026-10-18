@@ -31,10 +31,10 @@ export default defineConfig({
       command: 'npm run start:e2e',
       cwd: '../integrity-tech-backend',
       url: `${backendURL}/health/live`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: process.env.E2E_REUSE_SERVERS === 'true',
       timeout: 120_000,
       env: {
-        PORT: '3001',
+        PORT: new URL(backendURL).port || '3001',
         NODE_ENV: 'test',
         DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:localpassword123@127.0.0.1:5432/integrity_tech_e2e?schema=public',
         REDIS_HOST: process.env.REDIS_HOST || '127.0.0.1',
@@ -60,9 +60,9 @@ export default defineConfig({
       },
     },
     {
-      command: 'npm run dev',
+      command: `npm run dev -- --hostname 127.0.0.1 --port ${new URL(frontendURL).port || '3000'}`,
       url: frontendURL,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: process.env.E2E_REUSE_SERVERS === 'true',
       timeout: 120_000,
       env: {
         BACKEND_URL: backendURL,

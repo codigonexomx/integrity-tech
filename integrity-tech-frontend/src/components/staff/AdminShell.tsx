@@ -1,5 +1,6 @@
 'use client';
 
+import { StaffActions } from '../navigation/StaffActions';
 import Link from 'next/link';
 import { TopNavigation } from '../navigation/TopNavigation';
 import { usePathname } from 'next/navigation';
@@ -13,6 +14,7 @@ type AdminShellProps = {
 };
 
 const navigation = [
+  { label: 'Candidatos', href: '/recruiter/dashboard' },
   { label: 'Dashboard', href: '/staff/admin' },
   { label: 'Evaluaciones', href: '/staff/admin/evaluations' },
   { label: 'Test Builder', href: '/staff/admin/test-builder' },
@@ -32,7 +34,7 @@ export function AdminShell({ children, active, title, subtitle }: AdminShellProp
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="flex min-h-screen flex-col lg:flex-row">
         <aside className="border-b border-slate-800 bg-slate-950/95 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-b-0 lg:border-r">
-          <div className="border-b border-slate-800 px-5 py-4">
+          <div className="border-b border-slate-800 px-5 py-4"><StaffActions />
             <TopNavigation variant="inline" />
           </div>
           <div className="flex items-center gap-3 border-b border-slate-800 px-5 py-5">

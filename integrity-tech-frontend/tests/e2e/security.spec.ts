@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import './fixtures/rate-limit-isolation';
+import { clearE2ERateLimitKeys } from './fixtures/rate-limit-isolation';
+
+test.beforeEach(async () => { await clearE2ERateLimitKeys(); });
 import {
   E2E,
   acceptConsent,
@@ -34,7 +36,7 @@ test.describe('Enterprise E2E security controls', () => {
 
     await seedAuthenticatedPage(page, candidate.token);
     await page.goto('/recruiter/dashboard');
-    await expect(page.getByText('No tienes permisos para consultar intentos de evaluación.', { exact: true })).toBeVisible();
+    await expect(page.getByText('No tienes permisos para acceder a este recurso.', { exact: true })).toBeVisible();
   });
 
   test('known UUID from another tenant does not expose reports or attempts', async ({ request }) => {

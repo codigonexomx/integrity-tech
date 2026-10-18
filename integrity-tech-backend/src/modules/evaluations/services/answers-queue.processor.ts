@@ -1,16 +1,12 @@
 import { Process, Processor } from '@nestjs/bull';
-import { Logger, Optional } from '@nestjs/common';
+import { ConflictException, Logger, Optional } from '@nestjs/common';
 import { Job } from 'bull';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../shared/database/prisma.service';
-import { GradingStrategyFactory } from './grading-strategy';
+import { deadlineForAttempt, lockAttempt, persistSubmittedAnswer } from './answer-persistence';
 import { EvaluationGovernanceResolverService } from '../../psychometric-governance/services/evaluation-governance-resolver.service';
 import { MetricsService } from '../../../shared/observability/metrics.service';
-import {
-  INTEGRITY_LABORAL_ASSESSMENT_CODE,
-  INTEGRITY_LABORAL_DIMENSIONS,
-  dimensionByKey,
-} from '../integrity-laboral/integrity-laboral.definition';
+import { summarizeAssessment } from './assessment-score';
 import { RequestContextService } from '../../../shared/observability/request-context.service';
 
 @Processor('answers-queue')
@@ -25,204 +21,44 @@ export class AnswersQueueProcessor {
     @Optional() private readonly context?: RequestContextService,
   ) {}
 
+  // Drain legacy jobs safely; new pilot submissions are persisted synchronously.
   @Process('save-answer')
   async handleSaveAnswer(job: Job<any>) {
-    const { attemptId, questionId, itemVersionId, response, tiempoMs, submittedAt } = job.data;
-    
-    this.logger.log(`[Worker] Procesando respuesta. Job: ${job.id} | Intento: ${attemptId} | Tiempo de respuesta: ${tiempoMs || 0}ms`);
-
-    try {
-      const resolvedItemVersionId = itemVersionId || questionId;
-      const itemVersion = await (this.prisma as any).itemVersion.findFirst({
-        where: { id: resolvedItemVersionId },
-        select: { id: true, stemJson: true, scoringKeyJson: true },
-      });
-      this.metrics?.recordQueueJob('answers-queue', 'save-answer', 'completed');
-
-      if (!itemVersion) {
-        throw new Error(`Reactivo con ID ${resolvedItemVersionId} no encontrado.`);
-      }
-
-      const belongsToAttempt = await this.governanceResolver.validateItemVersionBelongsToAttempt({
-        attemptId,
-        questionId,
-        itemVersionId: resolvedItemVersionId,
-      });
-
-      if (!belongsToAttempt) {
-        throw new Error(`Reactivo ${questionId} no pertenece a la versión psicométrica del intento ${attemptId}.`);
-      }
-
-      // 2. APLICAR EL PATRÓN ESTRATEGIA PARA OBTENER CALIFICACIÓN
-      const stem = itemVersion.stemJson as any;
-      const strategy = GradingStrategyFactory.getStrategy(stem?.type || 'UNKNOWN');
-      const content = stem?.content || stem || {};
-      const correctConfig = itemVersion.scoringKeyJson || content.correctConfig || {};
-      const questionPoints = Number(stem?.defaultPoints || 1);
-      
-      const { isCorrect, pointsEarned } = strategy.grade(response, correctConfig, questionPoints);
-
-      // 3. GUARDAR EN POSTGRESQL (UPSERT IDEMPOTENTE)
-      await this.prisma.answerSubmission.upsert({
-        where: {
-          unique_response_per_attempt_question: {
-            examAttemptId: attemptId,
-            questionId,
-          },
-        },
-        update: {
-          response,
-          itemVersionId: resolvedItemVersionId,
-          isCorrect,
-          pointsEarned,
-          tiempoMs,
-          submittedAt: new Date(submittedAt),
-        },
-        create: {
-          examAttemptId: attemptId,
-          questionId,
-          itemVersionId: resolvedItemVersionId,
-          response,
-          isCorrect,
-          pointsEarned,
-          tiempoMs,
-          submittedAt: new Date(submittedAt),
-        },
-      });
-
-      // 4. Consolidación sin contador Redis: si el intento ya fue finalizado,
-      // recalculamos de forma idempotente con las respuestas persistidas.
-      const attempt = await this.prisma.examAttempt.findUnique({
-        where: { id: attemptId },
-        select: { status: true, submittedAt: true },
-      });
-
-      if (attempt && ['SUBMITTED', 'COMPLETED'].includes(attempt.status)) {
-        this.logger.log(`[Worker] Respuesta procesada para intento finalizado ${attemptId}. Recalculando consolidación...`);
-        await this.consolidateAttemptScore(attemptId);
-      }
-
-    } catch (error) {
-      this.metrics?.recordQueueJob('answers-queue', 'save-answer', 'failed');
-      this.logger.error(`Error procesando respuesta en Job ${job.id}: ${error.message}`);
-      throw error; // Arrojar error activa el backoff y reintentos automáticos de BullMQ
-    }
+    await this.prisma.$transaction(async tx => {
+      const attempt = await lockAttempt(tx, job.data.attemptId);
+      if (attempt.status !== 'IN_PROGRESS') return;
+      const previous = await tx.answerSubmission.findUnique({ where: {
+        unique_response_per_attempt_question: { examAttemptId: attempt.id, questionId: job.data.questionId },
+      } });
+      const receivedAt = new Date(job.data.submittedAt);
+      if (!Number.isFinite(receivedAt.getTime()) || (previous && previous.submittedAt >= receivedAt)) return;
+      if (receivedAt >= await deadlineForAttempt(tx, attempt)) return;
+      await persistSubmittedAnswer(tx, attempt, job.data, receivedAt);
+    });
   }
 
-  /**
-   * Consolidación final del puntaje del intento de Assessment (Evaluación) en una sola transacción atómica.
-   * Evita condiciones de carrera mediante Pessimistic Locking (SELECT FOR UPDATE) en PostgreSQL.
-   * Calcula el puntaje total y el desglose de perfil psicométrico por dimensiones.
-   */
-  async consolidateAttemptScore(attemptId: string): Promise<void> {
-    let finalScore: number;
-    await this.prisma.$transaction(async (tx) => {
-      // 1. ADQUIRIR BLOQUEO PESIMISTA (FOR UPDATE)
-      const attempts = await tx.$queryRaw<any[]>`
-        SELECT id, status FROM exam_attempts 
-        WHERE id = ${attemptId}::uuid 
-        FOR UPDATE;
-      `;
-      
-      const attempt = attempts[0];
-      if (!attempt) {
-        throw new Error(`Intento ${attemptId} no encontrado para consolidación.`);
-      }
-
-      // 2. RECUPERAR RESPUESTAS E ITEMVERSIONS ASOCIADOS
-      const submissions = await tx.answerSubmission.findMany({
-        where: { examAttemptId: attemptId },
-        select: {
-          questionId: true,
-          itemVersionId: true,
-          pointsEarned: true,
-        },
+  async closeAttempt(attemptId: string): Promise<'COMPLETED' | 'EXPIRED'> {
+    return this.prisma.$transaction(async tx => {
+      const attempt = await lockAttempt(tx, attemptId);
+      if (attempt.status === 'COMPLETED' || attempt.status === 'EXPIRED') return attempt.status;
+      if (!['IN_PROGRESS', 'SUBMITTED'].includes(attempt.status)) throw new ConflictException('El intento está cerrado.');
+      const submissions = await tx.answerSubmission.findMany({ where: { examAttemptId: attemptId } });
+      const links = await tx.assessmentVersionItem.findMany({
+        where: { assessmentVersionId: attempt.assessmentVersionId, itemVersion: { item: { organizationId: attempt.organizationId } } },
+        include: { itemVersion: true },
       });
-
-      const itemVersionIds = submissions.map((s) => s.itemVersionId || s.questionId);
-      const itemVersions = await (tx as any).itemVersion.findMany({
-        where: { id: { in: itemVersionIds } },
-        select: { id: true, stemJson: true, scoringKeyJson: true },
-      });
-
-      // 3. AGRUPACIÓN Y CÁLCULO POR DIMENSIONES PSICOMÉTRICAS
-      const itemVersionsMap = new Map<string, any>(itemVersions.map((item: any) => [item.id, item]));
-      const isIntegrityLaboralAttempt = itemVersions.some((item: any) => {
-        const stem = item.stemJson as any;
-        const content = stem?.content || stem || {};
-        const scoring = item.scoringKeyJson || {};
-        return content?.assessmentCode === INTEGRITY_LABORAL_ASSESSMENT_CODE || scoring?.assessmentCode === INTEGRITY_LABORAL_ASSESSMENT_CODE;
-      });
-
-      const dimensionsMap: Record<string, { earned: number; max: number; label?: string }> = {};
-      let totalScore = 0;
-
-      for (const sub of submissions) {
-        const itemVersion = itemVersionsMap.get(sub.itemVersionId || sub.questionId);
-        if (!itemVersion) continue;
-
-        const stem = itemVersion.stemJson as any;
-        const content = stem?.content || stem || {};
-        const scoring = itemVersion.scoringKeyJson || {};
-        const points = Number(sub.pointsEarned);
-        const maxPoints = isIntegrityLaboralAttempt ? 5 : Number(stem?.defaultPoints || 1);
-        totalScore += points;
-
-        const dimensionKey = scoring?.dimensionKey || content?.dimensionKey || content?.dimension || stem?.dimension || 'GENERAL';
-        const dimensionLabel = scoring?.dimension || content?.dimension || dimensionByKey(dimensionKey)?.name || dimensionKey;
-
-        if (!dimensionsMap[dimensionKey]) {
-          dimensionsMap[dimensionKey] = { earned: 0, max: 0, label: dimensionLabel };
+      const summary = summarizeAssessment(links, submissions);
+      if (!summary) {
+        if (new Date() < await deadlineForAttempt(tx, attempt)) {
+          throw new ConflictException('Faltan respuestas. Completa todas las preguntas antes de entregar.');
         }
-        dimensionsMap[dimensionKey].earned += points;
-        dimensionsMap[dimensionKey].max += maxPoints;
+        await tx.examAttempt.update({ where: { id: attemptId }, data: { status: 'EXPIRED', submittedAt: attempt.submittedAt || new Date() } });
+        return 'EXPIRED';
       }
-
-      const scoreDetails: Record<string, any> = {};
-      for (const [dim, data] of Object.entries(dimensionsMap)) {
-        scoreDetails[dim] = {
-          name: data.label || dim,
-          earned: Number(data.earned.toFixed(2)),
-          max: Number(data.max.toFixed(2)),
-          percentage: data.max > 0 ? Number(((data.earned / data.max) * 100).toFixed(1)) : 0,
-        };
-      }
-
-      if (isIntegrityLaboralAttempt) {
-        const maxGlobal = INTEGRITY_LABORAL_DIMENSIONS.length * 25;
-        scoreDetails.integrityLaboral = {
-          assessmentCode: INTEGRITY_LABORAL_ASSESSMENT_CODE,
-          title: 'Perfil de Integridad Laboral',
-          global: {
-            name: 'Integridad Global',
-            earned: Number(totalScore.toFixed(2)),
-            max: maxGlobal,
-            percentage: Number(((totalScore / maxGlobal) * 100).toFixed(1)),
-          },
-        };
-      }
-
-      // 4. ACTUALIZAR INTENTO A ESTADO COMPLETADO CON EL DESGLOSE JSONB
-      await tx.examAttempt.update({
-        where: { id: attemptId },
-        data: {
-          score: totalScore,
-          scoreDetails: scoreDetails as any, // Persistencia de la telemetría psicométrica
-          status: 'COMPLETED',
-          submittedAt: new Date(),
-        },
-      });
-
-      this.logger.log(`[Consolidación] Intento ${attemptId} calificado. Nota: ${totalScore} | Perfil: ${JSON.stringify(scoreDetails)}`);
-      finalScore = totalScore;
+      await tx.examAttempt.update({ where: { id: attemptId }, data: {
+        score: summary.total, scoreDetails: summary.dimensions, status: 'COMPLETED', submittedAt: attempt.submittedAt || new Date(),
+      } });
+      return 'COMPLETED';
     });
-
-    // 5. EMITIR EVENTO FUERA DE LA TRANSACCIÓN (Desacoplamiento LTI)
-    if (finalScore !== undefined) {
-      this.eventEmitter.emit('exam.attempt.completed', {
-        attemptId,
-        score: finalScore,
-      });
-    }
   }
 }

@@ -15,21 +15,18 @@ export class AttemptService {
     for (const att of attempts) {
       const user = await this.attempts.findUserInTenant(att.userId, organizationId);
       const exam = await this.attempts.findExamInTenant(att.examId, organizationId);
-      const logs = att.logs || [];
-      const hasCritical = logs.some((log) => log.riskLevel === 'CRITICAL');
-      const hasWarning = logs.some((log) => log.riskLevel === 'WARNING');
-      const riskStatus = hasCritical ? 'CRITICAL' : hasWarning ? 'WARNING' : 'SAFE';
-      const statusLabel = riskStatus === 'CRITICAL' ? 'Fraude probable' : riskStatus === 'WARNING' ? 'Sospechoso' : 'Sin alertas';
+      const expired = att.status === 'EXPIRED' || (att.status === 'IN_PROGRESS' && Date.now() >= att.startedAt.getTime() + (exam?.durationMinutes || 10) * 60_000);
+      const statusLabel = att.status === 'COMPLETED' ? 'Completado' : expired ? 'Tiempo terminado · incompleto' : att.status === 'SUBMITTED' ? 'Pendiente de revisión' : 'En curso';
 
       result.push({
         id: att.id,
         candidateName: user ? `${user.firstName} ${user.lastName}`.trim() : 'Candidato Externo',
         email: user?.email || 'unknown@example.com',
         assessmentTitle: exam?.title || 'Evaluación Psicométrica',
-        date: att.submittedAt ? att.submittedAt.toLocaleString() : att.startedAt.toLocaleString(),
-        overallScore: att.score ? `${att.score}/100` : 'Pendiente',
-        incidentsCount: logs.length,
-        riskStatus,
+        date: att.submittedAt ? att.submittedAt.toISOString() : att.startedAt.toISOString(),
+        overallScore: att.status === 'COMPLETED' && att.score !== null ? `${att.score} puntos` : expired ? 'Sin puntuación · incompleto' : 'Pendiente',
+        incidentsCount: 0,
+        riskStatus: 'NOT_MONITORED',
         statusLabel,
       });
     }

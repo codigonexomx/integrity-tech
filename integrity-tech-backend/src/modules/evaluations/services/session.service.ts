@@ -29,7 +29,7 @@ export class SessionService {
       throw new NotFoundException('Intento de examen no encontrado.');
     }
 
-    if (!['IN_PROGRESS', 'SUBMITTED'].includes(attempt.status)) {
+    if (!['IN_PROGRESS', 'SUBMITTED', 'COMPLETED', 'EXPIRED'].includes(attempt.status)) {
       throw new BadRequestException('El intento no se encuentra disponible para el candidato.');
     }
 
@@ -66,9 +66,15 @@ export class SessionService {
       },
     });
 
+    const deadlineAt = new Date(attempt.startedAt.getTime() + (exam.durationMinutes || 10) * 60_000);
+    const status = attempt.status === 'IN_PROGRESS' && Date.now() >= deadlineAt.getTime() ? 'EXPIRED' : attempt.status;
+    const submissions = await this.prisma.answerSubmission.findMany({ where: { examAttemptId: attempt.id }, select: { questionId: true, response: true } });
     return {
+      serverNow: new Date().toISOString(),
+      deadlineAt: deadlineAt.toISOString(),
+      answers: Object.fromEntries(submissions.map(s => [s.questionId, s.response])),
       attemptId: attempt.id,
-      status: attempt.status,
+      status,
       exam: {
         id: exam.id,
         title: exam.title,

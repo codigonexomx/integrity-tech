@@ -1,14 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
 import { apiClient, ApiClientError } from '../../../services/api-client';
 
-type LoginResponse = { accessToken: string; refreshToken: string; user: { email: string; roles: string[] } };
+type LoginResponse = { accessToken: string; refreshToken: string; user: { email: string; roles: string[]; permissions: string[]; organizationName: string } };
 
 export default function StaffLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [organizationSlug, setOrganizationSlug] = useState('');
@@ -27,7 +25,9 @@ export default function StaffLoginPage() {
       }, { auth: false });
       localStorage.setItem('auth-token', session.accessToken);
       localStorage.setItem('refresh-token', session.refreshToken);
-      router.push('/staff/admin');
+      localStorage.setItem('staff-profile', JSON.stringify({ organizationName: session.user.organizationName, permissions: session.user.permissions }));
+      const permissions = session.user.permissions || [];
+      window.location.assign(permissions.includes('admin.manage') ? '/staff/admin' : permissions.includes('attempts.read') ? '/recruiter/dashboard' : '/staff/psychometrics');
     } catch (err: any) {
       if (err instanceof ApiClientError) setError(err.message);
       else setError(err.message || 'No se pudo iniciar sesión.');
@@ -43,11 +43,11 @@ export default function StaffLoginPage() {
         <h1 className="mt-4 text-2xl font-extrabold text-white">Acceso Staff</h1>
         <p className="mt-2 text-sm leading-6 text-slate-400">Ingresa con credenciales de administrador, psicóloga, evaluador o reclutador.</p>
 
-        <label className="mt-6 block text-xs font-bold uppercase tracking-wider text-slate-500">Correo</label>
-        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required className="mt-2 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+        <label htmlFor="staff-email" className="mt-6 block text-xs font-bold uppercase tracking-wider text-slate-500">Correo</label>
+        <input id="staff-email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required className="mt-2 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
 
-        <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-slate-500">Contraseña</label>
-        <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required className="mt-2 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+        <label htmlFor="staff-password" className="mt-4 block text-xs font-bold uppercase tracking-wider text-slate-500">Contraseña</label>
+        <input id="staff-password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required className="mt-2 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
 
         <label className="mt-4 block text-xs font-bold uppercase tracking-wider text-slate-500">Organización</label>
         <input value={organizationSlug} onChange={(e) => setOrganizationSlug(e.target.value)} placeholder="slug opcional" className="mt-2 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-indigo-400" />

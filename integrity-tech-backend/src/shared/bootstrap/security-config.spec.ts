@@ -2,6 +2,8 @@ import { isCorsOriginAllowed, isSwaggerEnabled, parseAllowedOrigins, validatePro
 
 describe('bootstrap security config', () => {
   const validStorage = {
+    ENCRYPTION_KEY: 'ab'.repeat(32),
+    HMAC_SALT: 'secure-test-salt-'.repeat(3),
     STORAGE_PROVIDER: 's3',
     STORAGE_S3_BUCKET: 'private-bucket',
     STORAGE_S3_REGION: 'us-east-1',
@@ -125,12 +127,16 @@ describe('bootstrap security config', () => {
       ENABLE_DEV_AUTH: 'false',
       CORS_ORIGINS: 'https://app.integrity.test',
       API_BODY_LIMIT: '1mb',
+      ENCRYPTION_KEY: 'ab'.repeat(32),
+      HMAC_SALT: 'secure-test-salt-'.repeat(3),
     };
 
     // local-private ahora está permitido en producción con almacenamiento de disco persistente en Render
     expect(() => validateProductionSecurityConfig({
       ...base,
       STORAGE_PROVIDER: 'local-private',
+      STORAGE_LOCAL_PERSISTENT: 'true',
+      STORAGE_LOCAL_PRIVATE_PATH: '/data/private',
       STORAGE_SIGNED_URL_TTL_SECONDS: '300',
     } as any)).not.toThrow();
     expect(() => validateProductionSecurityConfig({
@@ -145,4 +151,10 @@ describe('bootstrap security config', () => {
       STORAGE_SIGNED_URL_TTL_SECONDS: '3600',
     } as any)).toThrow('STORAGE_SIGNED_URL_TTL_SECONDS');
   });
+  it('rejects missing production encryption secrets', () => {
+    const base = { NODE_ENV: 'production', DATABASE_URL: 'postgresql://db/app', REDIS_URL: 'redis://redis:6379', JWT_SECRET: 'a'.repeat(40), RATE_LIMIT_STORE: 'redis', CORS_ORIGINS: 'https://pilot.example', ...validStorage };
+    expect(() => validateProductionSecurityConfig({ ...base, ENCRYPTION_KEY: '' })).toThrow('ENCRYPTION_KEY');
+    expect(() => validateProductionSecurityConfig({ ...base, HMAC_SALT: '' })).toThrow('HMAC_SALT');
+  });
+
 });

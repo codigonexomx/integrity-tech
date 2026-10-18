@@ -52,7 +52,10 @@ export class ShortAnswerStrategy implements GradingStrategy {
  */
 export class LikertStrategy implements GradingStrategy {
   grade(response: any, correctConfig: any, questionPoints: number): { isCorrect: boolean; pointsEarned: number } {
-    const selectedValue = String(response.value);
+    const selectedValue = String(response?.value);
+    if (!response || !Object.prototype.hasOwnProperty.call(correctConfig.weights || {}, selectedValue)) {
+      throw new Error('Respuesta Likert fuera de la escala publicada.');
+    }
     
     // correctConfig contiene un objeto 'weights' que asocia el valor de escala a un peso (de 0.0 a 1.0)
     const weights = correctConfig.weights || {};

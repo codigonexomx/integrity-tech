@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
+import { queueRedisOptions } from './redis.config';
 
 export interface RateLimitHit {
   count: number;
@@ -81,9 +82,7 @@ export class RedisRateLimitStore implements OnModuleDestroy {
   private getRedis(): Redis {
     if (!this.redis) {
       this.redis = new Redis({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379', 10),
-        password: process.env.REDIS_PASSWORD || undefined,
+        ...queueRedisOptions(),
         keyPrefix: process.env.REDIS_KEY_PREFIX || '',
         lazyConnect: true,
         enableOfflineQueue: false,

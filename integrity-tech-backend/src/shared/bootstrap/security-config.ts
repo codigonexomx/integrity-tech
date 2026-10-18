@@ -9,8 +9,9 @@ export function parseAllowedOrigins(corsOrigins?: string): string[] {
     .filter(Boolean);
 }
 
-export function isCorsOriginAllowed(origin: string | undefined, allowedOrigins: string[], nodeEnv?: string): boolean {
-  if (!origin && nodeEnv !== 'production') return true;
+export function isCorsOriginAllowed(origin: string | undefined, allowedOrigins: string[], _nodeEnv?: string): boolean {
+  // CORS controls browser cross-origin access, not authentication or server health probes.
+  if (!origin) return true;
   return Boolean(origin && allowedOrigins.includes(origin));
 }
 
@@ -57,6 +58,12 @@ export function validateProductionSecurityConfig(env: NodeJS.ProcessEnv = proces
   }
 
   validateProductionStorageConfig(env);
+  if (!/^[a-fA-F0-9]{64}$/.test(env.ENCRYPTION_KEY || '') || /^([a-fA-F0-9])\1+$/.test(env.ENCRYPTION_KEY || '')) {
+    throw new Error('Configuración insegura: ENCRYPTION_KEY debe contener 32 bytes hexadecimales aleatorios.');
+  }
+  if ((env.HMAC_SALT || '').length < 32 || /development|change-me|replace-with/.test(env.HMAC_SALT || '')) {
+    throw new Error('Configuración insegura: HMAC_SALT debe ser un secreto de al menos 32 caracteres.');
+  }
 }
 
 function validateProductionStorageConfig(env: NodeJS.ProcessEnv): void {
@@ -64,6 +71,7 @@ function validateProductionStorageConfig(env: NodeJS.ProcessEnv): void {
     throw new Error('Configuración insegura: STORAGE_PROVIDER es obligatorio en producción.');
   }
   if (env.STORAGE_PROVIDER === 'local-private') {
+    if (env.STORAGE_LOCAL_PERSISTENT !== 'true' || !env.STORAGE_LOCAL_PRIVATE_PATH) throw new Error('Almacenamiento local productivo requiere STORAGE_LOCAL_PERSISTENT=true y STORAGE_LOCAL_PRIVATE_PATH.');
     return;
   }
   if (!['s3', 'gcs'].includes(env.STORAGE_PROVIDER)) {

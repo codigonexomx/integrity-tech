@@ -101,6 +101,9 @@ export type ExamAttemptDto = {
 export type ExamSessionResponse = {
   attemptId: string;
   status: ExamAttemptDto['status'];
+  serverNow?: string;
+  deadlineAt?: string;
+  answers?: Record<string, Record<string, unknown>>;
   startedAt?: string;
   submittedAt?: string | null;
   exam: Pick<ExamDto, 'id' | 'title' | 'durationMinutes'>;
@@ -174,6 +177,8 @@ export type StaffLoginResponse = {
     id: string;
     email: string;
     organizationId: string;
+    organizationName?: string;
+    permissions?: string[];
     roles: string[];
   };
 };

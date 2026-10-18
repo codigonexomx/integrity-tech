@@ -12,6 +12,8 @@ import { EvaluationBusinessRules } from './evaluation-business-rules';
 import {
   INTEGRITY_LABORAL_ASSESSMENT_CODE,
   INTEGRITY_LABORAL_DIMENSIONS,
+  INTEGRITY_LABORAL_SCORING_REVISION,
+  INTEGRITY_LABORAL_NOTICE,
 } from '../integrity-laboral/integrity-laboral.definition';
 
 @Injectable()
@@ -56,6 +58,7 @@ export class ReportService {
       const details = att.scoreDetails as any;
       integrityProfile = this.buildIntegrityLaboralProfile(details);
       for (const [dimName, val] of Object.entries(details)) {
+        if (dimName === 'integrityLaboral' || (integrityProfile && !integrityProfile.usable)) continue;
         const dimVal = val as any;
         dimensions.push({
           name: dimName,
@@ -97,8 +100,8 @@ export class ReportService {
       candidateName: candidate ? `${candidate.firstName} ${candidate.lastName}`.trim() : 'No disponible',
       email: candidate?.email || 'No disponible',
       assessmentTitle: exam?.title || 'No disponible',
-      date: att.submittedAt ? att.submittedAt.toLocaleString() : att.startedAt.toLocaleString(),
-      overallScore: att.score !== null && att.score !== undefined ? `${att.score}/100` : 'No disponible',
+      date: att.submittedAt ? att.submittedAt.toISOString() : att.startedAt.toISOString(),
+      overallScore: integrityProfile?.usable === false ? 'Resultado retirado' : (att.status === 'EXPIRED' || (att.status === 'IN_PROGRESS' && Date.now() >= att.startedAt.getTime() + ((exam as any)?.durationMinutes || 10) * 60_000)) ? 'Sin puntuación · tiempo terminado con preguntas pendientes' : att.status === 'SUBMITTED' ? 'Pendiente de revisión' : att.status !== 'COMPLETED' ? 'Pendiente de entrega' : att.score !== null && att.score !== undefined ? `${att.score} puntos (suma de reactivos)` : 'No disponible',
       ipAddress: att.ipAddress || 'No disponible',
       userAgent: att.userAgent || 'No disponible',
       sessionHmac: att.ltiMapping ? `lti-${att.ltiMapping.id}` : null,
@@ -210,6 +213,9 @@ export class ReportService {
   private buildIntegrityLaboralProfile(details: any) {
     if (details?.integrityLaboral?.assessmentCode !== INTEGRITY_LABORAL_ASSESSMENT_CODE) return null;
 
+    if (details.integrityLaboral.scoringRevision !== INTEGRITY_LABORAL_SCORING_REVISION) {
+      return { title: 'Resultado retirado', usable: false, notice: 'Esta versión tenía una clave de puntuación incorrecta. No usar sus resultados; crear una nueva evaluación.', global: { name: 'No interpretable', score: null, maxScore: null, percentage: 0, description: 'Resultado histórico conservado sin reinterpretación.' }, dimensions: [], strengths: [], explorationAreas: [], interviewQuestions: [] };
+    }
     const global = details.integrityLaboral.global || null;
     const dimensions = INTEGRITY_LABORAL_DIMENSIONS.map((definition) => {
       const score = details[definition.key] || {};
@@ -220,26 +226,27 @@ export class ReportService {
         score: Number(score.earned || 0),
         maxScore: Number(score.max || 25),
         percentage,
-        description: this.integrityDimensionInterpretation(definition.name, percentage),
+        description: 'Puntuación descriptiva de autoinforme; no es un percentil ni una conclusión sobre conducta laboral.',
       };
     });
 
-    const highDimensions = dimensions.filter((dimension) => dimension.percentage >= 80);
-    const lowDimensions = dimensions.filter((dimension) => dimension.percentage < 60);
+
 
     return {
       title: 'Perfil de Integridad Laboral',
+      usable: true,
+      notice: INTEGRITY_LABORAL_NOTICE,
       global: {
         name: 'Integridad Global',
         score: Number(global?.earned || 0),
         maxScore: Number(global?.max || 100),
         percentage: Number(global?.percentage || 0),
-        description: this.integrityGlobalInterpretation(Number(global?.percentage || 0)),
+        description: INTEGRITY_LABORAL_NOTICE,
       },
       dimensions,
-      strengths: highDimensions.map((dimension) => this.integrityStrengthText(dimension.name)),
-      explorationAreas: lowDimensions.map((dimension) => this.integrityExplorationText(dimension.name)),
-      interviewQuestions: lowDimensions.map((dimension) => ({
+      strengths: [],
+      explorationAreas: [],
+      interviewQuestions: dimensions.map((dimension) => ({
         dimension: dimension.name,
         question: this.integrityInterviewQuestion(dimension.key),
       })),
@@ -288,8 +295,8 @@ export class ReportService {
     return questions[key] || 'Comparta un ejemplo conductual reciente relacionado con esta dimensión.';
   }
 
-  private getDimensionDescription(dimName: string): string {
-    return EvaluationBusinessRules.dimensionDescription(dimName);
+  private getDimensionDescription(_dimName: string): string {
+    return 'Puntuación descriptiva según el contenido publicado. No determina aptitud laboral.';
   }
 
   private getLogMessage(eventType: string): string {

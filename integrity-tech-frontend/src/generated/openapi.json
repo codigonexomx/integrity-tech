@@ -201,6 +201,46 @@
         ]
       }
     },
+    "/api/admin/users": {
+      "get": {
+        "operationId": "AdminController_listUsers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar usuarios staff/candidatos del tenant para administración",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/admin/organization": {
+      "get": {
+        "operationId": "AdminController_getOrganization",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Consultar organización actual del tenant",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/health/live": {
       "get": {
         "operationId": "HealthController_live",
@@ -258,6 +298,18 @@
       }
     },
     "/api/exams": {
+      "get": {
+        "operationId": "ExamController_listPublished",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Exam"
+        ]
+      },
       "post": {
         "operationId": "ExamController_create",
         "parameters": [
@@ -484,7 +536,7 @@
     },
     "/api/evaluations/attempts/{attemptId}/submit": {
       "post": {
-        "description": "Encola la respuesta del alumno de forma asíncrona en la cola BullMQ answers-queue y retorna un ID de procesamiento (jobId).",
+        "description": "Guarda y puntúa la respuesta de forma transaccional antes de confirmar recepción.",
         "operationId": "ResponsesController_submitAnswer",
         "parameters": [
           {
@@ -509,7 +561,7 @@
         },
         "responses": {
           "202": {
-            "description": "La respuesta fue aceptada en la cola de procesamiento."
+            "description": "La respuesta fue guardada y puntuada."
           }
         },
         "security": [
@@ -786,632 +838,35 @@
         ]
       }
     },
-    "/api/api/v1/psicometria/parametros/{test_id}": {
-      "get": {
-        "operationId": "PsicometriaController_getParameters",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener parámetros de ítems para un test",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/calibrar": {
-      "post": {
-        "operationId": "PsicometriaController_triggerCalibration",
-        "parameters": [],
-        "responses": {
-          "202": {
-            "description": ""
-          }
-        },
-        "summary": "Lanzar calibración psicométrica offline (2PL / GRM)",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/baremos/dinamicos": {
-      "get": {
-        "operationId": "PsicometriaController_getDynamicNorm",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "pais",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sector",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "nivel_educativo",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "tipo_puesto",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener baremo dinámico aplicando especificidad jerárquica",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/baremos/percentil": {
-      "get": {
-        "operationId": "PsicometriaController_getPercentile",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "theta",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "pais",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "sector",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "nivel_educativo",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "tipo_puesto",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener percentil y tamaño de muestra directamente según theta y datos de agrupación",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/evaluations/attempts/{id}/theta": {
-      "get": {
-        "operationId": "PsicometriaController_getAttemptTheta",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "ID del intento de examen (UUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener nivel de habilidad latente (theta) de un intento",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/{test_id}/informacion": {
-      "get": {
-        "operationId": "PsicometriaController_getTestInformation",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener la curva de información del test (TIF) y el error estándar condicional",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/{test_id}/cut-scores": {
-      "get": {
-        "operationId": "PsicometriaController_getCutScores",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener los estándares de competencia (Cut-scores) configurados para un test",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/items/{test_id}/mal-ajuste": {
-      "get": {
-        "operationId": "PsicometriaController_getMisfittingItems",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener ítems con desajuste psicométrico significativo (p < 0.01 o RMSEA elevado)",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/parametros/{test_id}/historial": {
-      "get": {
-        "operationId": "PsicometriaController_getParametersHistory",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener el historial completo de calibraciones y parámetros pasados del test",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/quality": {
-      "get": {
-        "operationId": "PsicometriaController_getPsychometricQualityDashboard",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "days",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener el panel histórico de calidad psicométrica (drift, fiabilidad, etc.)",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/dif/{test_id}": {
-      "get": {
-        "operationId": "PsicometriaController_getItemsWithDIF",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Obtener ítems con sesgo demográfico significativo (DIF)",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/recalcular-historico/{test_id}": {
-      "post": {
-        "operationId": "PsicometriaController_recalculateHistoricalScores",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Recalcular retroactivamente theta, error, escalas y percentil para históricos usando los parámetros vigentes",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/validez/analizar": {
-      "post": {
-        "operationId": "PsicometriaController_analyzePredictiveValidity",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Analizar validez predictiva cargando datos de desempeño",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/reporte/{attempt_id}/narrativo": {
-      "get": {
-        "operationId": "PsicometriaController_getReporteNarrativo",
-        "parameters": [
-          {
-            "name": "attempt_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del intento (ej. UUID v7)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Generar reporte narrativo (NLG) para un intento de examen",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/impacto-adverso/{test_id}": {
-      "get": {
-        "operationId": "PsicometriaController_getImpactoAdverso",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Calcular el Impacto Adverso por demografías de grupo (Regla del 80%)",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/roi/calcular": {
-      "post": {
-        "operationId": "PsicometriaController_getRoiCalcular",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Calcular el ROI del talento mediante modelo BCG (Brogden-Cronbach-Gleser)",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/cat/siguiente": {
-      "post": {
-        "operationId": "PsicometriaController_selectCatItem",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Seleccionar siguiente reactivo adaptativo CAT utilizando MII",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/baremo-continuo/calibrar/{test_id}": {
-      "post": {
-        "operationId": "PsicometriaController_runContinuousNormingCalibration",
-        "parameters": [
-          {
-            "name": "test_id",
-            "required": true,
-            "in": "path",
-            "description": "ID del test (ej. IT2_AC10)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        },
-        "summary": "Calibrar normas continuas suavizadas GAMLSS para un test específico",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/api/v1/psicometria/baremo-continuo/percentil": {
-      "get": {
-        "operationId": "PsicometriaController_getPercentileContinuous",
-        "parameters": [
-          {
-            "name": "testId",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "theta",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "pais",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "nivelEducativo",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "tipoPuesto",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "summary": "Consultar percentil suavizado continuo mediante interpolación lineal",
-        "tags": [
-          "Psicometría Avanzada (IRT)"
-        ]
-      }
-    },
-    "/api/evaluations/cat/sessions": {
-      "post": {
-        "operationId": "CatController_startSession",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StartCatSessionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Sesión iniciada con éxito. Devuelve la sesión y el primer reactivo."
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Iniciar una sesión adaptativa computerizada (CAT)",
-        "tags": [
-          "CAT (Computerized Adaptive Testing Engine)"
-        ]
-      }
-    },
-    "/api/evaluations/cat/sessions/{sessionId}/response": {
-      "post": {
-        "operationId": "CatController_submitResponse",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubmitCatResponseDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Respuesta procesada. Devuelve el siguiente reactivo o finalización."
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Enviar respuesta al reactivo adaptativo activo",
-        "tags": [
-          "CAT (Computerized Adaptive Testing Engine)"
-        ]
-      }
-    },
     "/api/psychometric-governance/assessments": {
+      "post": {
+        "operationId": "EditorialConsoleController_createAssessment",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssessmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crear evaluación gobernada con versión inicial DRAFT",
+        "tags": [
+          "Psychometric Governance Editorial Console"
+        ]
+      },
       "get": {
         "operationId": "EditorialConsoleController_listAssessments",
         "parameters": [],
@@ -1518,7 +973,74 @@
         ]
       }
     },
+    "/api/psychometric-governance/assessment-versions/{assessmentVersionId}/items": {
+      "put": {
+        "operationId": "EditorialConsoleController_setAssessmentVersionItems",
+        "parameters": [
+          {
+            "name": "assessmentVersionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAssessmentVersionItemsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Vincular reactivos a una versión editable de evaluación",
+        "tags": [
+          "Psychometric Governance Editorial Console"
+        ]
+      }
+    },
     "/api/psychometric-governance/items": {
+      "post": {
+        "operationId": "EditorialConsoleController_createItem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crear reactivo gobernado con versión inicial DRAFT",
+        "tags": [
+          "Psychometric Governance Editorial Console"
+        ]
+      },
       "get": {
         "operationId": "EditorialConsoleController_listItems",
         "parameters": [],
@@ -1809,71 +1331,6 @@
           "Proctoring (Supervisión e Integridad)"
         ]
       }
-    },
-    "/api/lti/login": {
-      "get": {
-        "description": "Endpoint de redirección que inicia el protocolo OIDC de 3 pasos con Moodle/Canvas.",
-        "operationId": "LtiController_initiateLogin",
-        "parameters": [
-          {
-            "name": "iss",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "login_hint",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "target_link_uri",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "lti_message_hint",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "302": {
-            "description": "Redirección al portal de autenticación del LMS."
-          }
-        },
-        "summary": "Iniciar login federado LTI OIDC",
-        "tags": [
-          "LTI v1.3 Integration (LMS Interoperability)"
-        ]
-      }
-    },
-    "/api/lti/launch": {
-      "post": {
-        "description": "Recibe el id_token firmado por el LMS, valida la sesión, auto-provisiona al estudiante en base de datos, inicializa el intento y lo redirige al visualizador del examen Next.js con un token local.",
-        "operationId": "LtiController_ltiLaunch",
-        "parameters": [],
-        "responses": {
-          "302": {
-            "description": "Redirección al visualizador del examen en el frontend Next.js."
-          }
-        },
-        "summary": "Procesar lanzamiento de examen LTI Launch",
-        "tags": [
-          "LTI v1.3 Integration (LMS Interoperability)"
-        ]
-      }
     }
   },
   "info": {
@@ -2087,13 +1544,268 @@
           }
         }
       },
-      "StartCatSessionDto": {
+      "CreateAssessmentDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Código único de la evaluación dentro de la organización",
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "description": "Nombre público de la evaluación",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "description": "Descripción breve de la evaluación",
+            "maxLength": 1000
+          },
+          "shortName": {
+            "type": "string",
+            "description": "Nombre corto para navegación y reportes",
+            "maxLength": 120
+          },
+          "scientificDescription": {
+            "type": "string",
+            "description": "Descripción científica completa",
+            "maxLength": 4000
+          },
+          "constructObjective": {
+            "type": "string",
+            "description": "Objetivo del constructo evaluado",
+            "maxLength": 2000
+          },
+          "candidateInstructions": {
+            "type": "string",
+            "description": "Instrucciones para el candidato",
+            "maxLength": 4000
+          },
+          "estimatedTimeMinutes": {
+            "type": "number",
+            "description": "Tiempo estimado en minutos",
+            "minimum": 1
+          },
+          "author": {
+            "type": "string",
+            "description": "Autor científico o responsable",
+            "maxLength": 255
+          },
+          "scientificReferences": {
+            "type": "object",
+            "description": "Referencias científicas estructuradas"
+          },
+          "language": {
+            "type": "string",
+            "description": "Idioma principal",
+            "maxLength": 10
+          },
+          "factors": {
+            "description": "Factores científicos de la evaluación",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "facets": {
+            "description": "Facetas científicas de la evaluación",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "responseTypes": {
+            "description": "Catálogo de tipos de respuesta usado por la evaluación",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scoringConfig": {
+            "type": "object",
+            "description": "Configuración de corrección, aleatorización y cortes"
+          },
+          "reportConfig": {
+            "type": "object",
+            "description": "Configuración de reportes"
+          },
+          "normingConfig": {
+            "type": "object",
+            "description": "Configuración futura de normas y baremos"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ]
       },
-      "SubmitCatResponseDto": {
+      "AssessmentVersionItemLinkDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "itemVersionId": {
+            "type": "string",
+            "description": "ID de la versión de reactivo gobernada"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Orden dentro de la evaluación",
+            "minimum": 0
+          },
+          "weight": {
+            "type": "number",
+            "description": "Peso del reactivo dentro de la evaluación",
+            "minimum": 0
+          },
+          "role": {
+            "type": "string",
+            "description": "Rol del reactivo dentro de la evaluación",
+            "maxLength": 50
+          }
+        },
+        "required": [
+          "itemVersionId"
+        ]
+      },
+      "SetAssessmentVersionItemsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Reactivos vinculados a la versión de evaluación",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssessmentVersionItemLinkDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "CreateItemDto": {
+        "type": "object",
+        "properties": {
+          "itemCode": {
+            "type": "string",
+            "description": "Código único del reactivo dentro de la organización",
+            "maxLength": 120
+          },
+          "text": {
+            "type": "string",
+            "description": "Texto visible del reactivo",
+            "maxLength": 2000
+          },
+          "responseType": {
+            "type": "string",
+            "description": "Tipo de respuesta reutilizable",
+            "example": "LIKERT_5_AGREEMENT",
+            "maxLength": 80
+          },
+          "isReverseScored": {
+            "type": "boolean",
+            "description": "Indica si el reactivo invierte la escala"
+          },
+          "order": {
+            "type": "number",
+            "description": "Orden sugerido en el banco",
+            "minimum": 0
+          },
+          "authorNotes": {
+            "type": "string",
+            "description": "Notas del autor del reactivo",
+            "maxLength": 2000
+          },
+          "constructMeasured": {
+            "type": "string",
+            "description": "Constructo medido",
+            "maxLength": 255
+          },
+          "observableBehavior": {
+            "type": "string",
+            "description": "Conducta observable asociada",
+            "maxLength": 1000
+          },
+          "itemHypothesis": {
+            "type": "string",
+            "description": "Hipótesis científica del reactivo",
+            "maxLength": 1000
+          },
+          "scientificSource": {
+            "type": "string",
+            "description": "Fuente científica",
+            "maxLength": 1000
+          },
+          "bibliographyReference": {
+            "type": "string",
+            "description": "Referencia bibliográfica",
+            "maxLength": 1000
+          },
+          "doi": {
+            "type": "string",
+            "description": "DOI opcional",
+            "maxLength": 255
+          },
+          "version": {
+            "type": "string",
+            "description": "Versión inicial del reactivo",
+            "example": "1.0.0",
+            "maxLength": 50
+          },
+          "stemJson": {
+            "type": "object",
+            "description": "Contenido estructurado del reactivo"
+          },
+          "scoringKeyJson": {
+            "type": "object",
+            "description": "Clave de scoring protegida"
+          },
+          "tags": {
+            "type": "object",
+            "description": "Etiquetas del reactivo"
+          },
+          "language": {
+            "type": "string",
+            "description": "Idioma del reactivo",
+            "maxLength": 10
+          },
+          "category": {
+            "type": "string",
+            "description": "Dimensión/categoría",
+            "maxLength": 160
+          },
+          "competency": {
+            "type": "string",
+            "description": "Competencia asociada",
+            "maxLength": 160
+          },
+          "scale": {
+            "type": "string",
+            "description": "Escala asociada",
+            "maxLength": 160
+          },
+          "subscale": {
+            "type": "string",
+            "description": "Subescala asociada",
+            "maxLength": 160
+          },
+          "difficulty": {
+            "type": "number",
+            "description": "Dificultad estimada"
+          },
+          "discrimination": {
+            "type": "number",
+            "description": "Discriminación estimada"
+          },
+          "expectedTimeSeconds": {
+            "type": "number",
+            "description": "Tiempo esperado en segundos",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "itemCode",
+          "stemJson"
+        ]
       },
       "UpdateDraftVersionDto": {
         "type": "object",

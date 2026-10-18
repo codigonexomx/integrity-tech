@@ -39,3 +39,19 @@ test-results/
 # Private local storage
 .private-storage/
 **/.private-storage/
+
+# Pilot secrets and local verification
+.env.pilot
+.env*
+**/.env*
+!.env*.example
+!**/.env*.example
+*.tsbuildinfo
+__pycache__/
+pilot-backups/
+pilot-restore/
+.pilot-operation.lock
+output/
+
+# Local commercial proposals and prospect messages are not public source
+commercial/

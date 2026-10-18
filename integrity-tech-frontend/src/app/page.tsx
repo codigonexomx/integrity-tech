@@ -25,7 +25,7 @@ export default function WelcomePage() {
           </h2>
         </div>
         <p className="text-xs md:text-sm text-slate-400 max-w-sm leading-relaxed mt-2 px-4">
-          Plataforma de evaluación psicométrica resiliente con supervisión forense y LTI.
+          Piloto de evaluaciones: invitaciones, respuestas y reportes descriptivos.
         </p>
       </div>
 
@@ -40,7 +40,7 @@ export default function WelcomePage() {
           <div>
             <h3 className="text-base font-bold text-slate-100">Portal del Candidato</h3>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Toma de evaluaciones de integridad mediante clave de acceso única con webcam proctoring y guardado local resiliente.
+              Completa la evaluación que te asignaron mediante una clave de acceso.
             </p>
           </div>
           <Link
@@ -80,7 +80,7 @@ export default function WelcomePage() {
           <div>
             <h3 className="text-base font-bold text-slate-100">Consola de Selección</h3>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Dashboard para analistas de selección de RRHH. Monitoreo de perfiles por dimensiones y auditoría forense de proctoring.
+              Dashboard para analistas de selección de RRHH. Monitoreo de perfiles por dimensiones y seguimiento de evaluaciones.
             </p>
           </div>
           <Link
@@ -99,7 +99,7 @@ export default function WelcomePage() {
         <div>Base de Datos: PostgreSQL + Redis (BullMQ)</div>
         <div className="mt-2 text-xs font-semibold">
           <Link href="/ciencia" className="text-indigo-400 hover:text-indigo-350 underline">
-            🔬 Respaldado por Ciencia: Ver White Paper Técnico v1.0
+            Alcance e interpretación del piloto
           </Link>
         </div>
       </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { apiClient } from '../../services/api-client';
 import { analyticsService } from '../../services/analytics';
 
 interface FeedbackLayerProps {
@@ -30,19 +31,8 @@ export function FeedbackLayer({ attemptId, onFeedbackSubmitted }: FeedbackLayerP
         hasComment: feedbackText.trim().length > 0,
       });
 
-      const response = await fetch(`/api/evaluations/attempts/${attemptId}/feedback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // En producción pasaríamos el Bearer token almacenado, 
-          // pero el endpoint local lee la sesión o JWT local.
-          'Authorization': `Bearer ${localStorage.getItem('auth-token') || ''}`,
-        },
-        body: JSON.stringify({
-          npsScore,
-          feedbackText: feedbackText.trim() || undefined,
-        }),
-      });
+      await apiClient.post(`/evaluations/attempts/${attemptId}/feedback`, { npsScore, feedbackText: feedbackText.trim() || undefined });
+      const response = { ok: true };
 
       if (response.ok) {
         setIsSubmitted(true);
@@ -88,7 +78,7 @@ export function FeedbackLayer({ attemptId, onFeedbackSubmitted }: FeedbackLayerP
           <label className="text-xs font-semibold text-slate-400">
             Califica el rendimiento técnico global de la plataforma (0: Pésimo, 10: Excelente):
           </label>
-          <div className="grid grid-cols-11 gap-1.5 justify-center">
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 justify-center">
             {Array.from({ length: 11 }, (_, i) => i).map((score) => {
               const isSelected = npsScore === score;
               return (
@@ -96,7 +86,7 @@ export function FeedbackLayer({ attemptId, onFeedbackSubmitted }: FeedbackLayerP
                   key={score}
                   type="button"
                   onClick={() => setNpsScore(score)}
-                  className={`aspect-square w-full rounded-lg border font-mono font-bold text-xs flex items-center justify-center transition-all cursor-pointer ${
+                  className={`min-h-11 w-full rounded-lg border font-mono font-bold text-xs flex items-center justify-center transition-all cursor-pointer ${
                     isSelected
                       ? score >= 9
                         ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'

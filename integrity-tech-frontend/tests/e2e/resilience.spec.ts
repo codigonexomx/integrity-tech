@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import './fixtures/rate-limit-isolation';
+import { clearE2ERateLimitKeys } from './fixtures/rate-limit-isolation';
+
+test.beforeEach(async () => { await clearE2ERateLimitKeys(); });
 import {
   E2E,
   acceptConsent,

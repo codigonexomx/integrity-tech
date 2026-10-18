@@ -1,10 +1,11 @@
 'use client';
 
+import { useParams } from 'next/navigation';
+
 import Link from 'next/link';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '../../../../../components/staff/AdminShell';
 
-type PageProps = { params: { versionId: string } };
 type Notice = { type: 'success' | 'error'; message: string } | null;
 
 const statusTone: Record<string, string> = {
@@ -39,7 +40,8 @@ function apiError(status: number) {
   return messages[status] || 'No se pudo completar la operación.';
 }
 
-export default function ItemVersionDetailPage({ params }: PageProps) {
+export default function ItemVersionDetailPage() {
+  const params = useParams<{ versionId: string }>();
   const [detail, setDetail] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [notice, setNotice] = useState<Notice>(null);

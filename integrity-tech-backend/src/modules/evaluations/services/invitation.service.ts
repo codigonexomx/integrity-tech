@@ -24,7 +24,7 @@ export class InvitationService {
   ) {}
 
   async createInvitation(user: SessionUser, body: CreateInvitationDto, metadata: AuditRequestMetadata = {}) {
-    this.logger.log(`Generando clave de acceso para candidato: ${body.candidateName} (${body.email})`);
+    this.logger.log('Generando invitación de candidato.');
 
     const exam = await this.resolveExamForInvitation(body.examId, user);
     const accessCode = await this.generateUniqueAccessCode();

@@ -8,6 +8,7 @@ export interface QueuedAnswer {
   questionId: string;
   response: any;
   timestamp: number;
+  revision?: string;
   attempts: number;
   tiempoMs?: number;
   itemVersionId?: string | null;
@@ -92,6 +93,7 @@ export class SyncEngine {
 
     const queuedItem: QueuedAnswer = {
       id: `ans:${attemptId}:${questionId}`,
+      revision: crypto.randomUUID(),
       attemptId,
       questionId,
       response,
@@ -150,16 +152,16 @@ export class SyncEngine {
     this.processProctoringBatch();
   }
 
-  async flushAnswers(timeoutMs = 5000): Promise<boolean> {
+  async flushAnswers(timeoutMs = 5000, attemptId?: string): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       await this.processAnswers();
       const remaining = await this.getAllItems<QueuedAnswer>(this.answersStore);
-      if (remaining.length === 0) return true;
+      if (remaining.filter(item => !attemptId || item.attemptId === attemptId).length === 0) return true;
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     const remaining = await this.getAllItems<QueuedAnswer>(this.answersStore);
-    return remaining.length === 0;
+    return remaining.filter(item => !attemptId || item.attemptId === attemptId).length === 0;
   }
 
   /**
@@ -181,18 +183,19 @@ export class SyncEngine {
 
         const success = await this.sendAnswerToServer(item);
         if (success) {
-          await this.removeItem(this.answersStore, item.id);
+          await this.finishAnswer(item);
         } else {
           // Si falla, incrementamos su contador de intentos y programamos backoff
           await this.incrementRetry(this.answersStore, item);
           this.scheduleQueueProcessing();
-          break; // Detener flujo para no saturar
+          continue; // An older attempt must not block another candidate.
         }
       }
     } catch (error) {
       console.error('Error procesando cola de respuestas:', error);
     } finally {
       this.isProcessingAnswers = false;
+      this.scheduleQueueProcessing();
     }
   }
 
@@ -246,7 +249,6 @@ export class SyncEngine {
     try {
       const response = await apiClient.raw(`/evaluations/attempts/${item.attemptId}/submit`, {
         method: 'POST',
-        token: this.getAuthToken(),
         body: JSON.stringify({
           questionId: item.questionId,
           response: item.response,
@@ -309,10 +311,11 @@ export class SyncEngine {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction(storeName, 'readwrite');
       const store = transaction.objectStore(storeName);
-      const request = store.put(updatedItem);
-
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      // Do not restore an older response over a new local selection.
+      const current = store.get(item.id);
+      current.onsuccess = () => { if (current.result?.revision === item.revision) store.put(updatedItem); };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
     });
   }
 
@@ -349,6 +352,21 @@ export class SyncEngine {
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  async pendingAnswers(attemptId: string) {
+    return (await this.getAllItems<QueuedAnswer>(this.answersStore)).filter(item => item.attemptId === attemptId);
+  }
+
+  private async finishAnswer(item: QueuedAnswer): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction(this.answersStore, 'readwrite');
+      const store = tx.objectStore(this.answersStore);
+      const request = store.get(item.id);
+      request.onsuccess = () => { if (request.result?.revision === item.revision) store.delete(item.id); };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
   }
 

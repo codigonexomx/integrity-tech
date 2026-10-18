@@ -5,7 +5,7 @@ import { AuditService } from '../../audit/services/audit.service';
 import { AcceptCandidateConsentDto } from '../dto/candidate-consent.dto';
 import { AttemptRepository } from '../repositories/attempt.repository';
 
-export const CURRENT_CANDIDATE_CONSENT_VERSION = 'candidate-consent-v1';
+export const CURRENT_CANDIDATE_CONSENT_VERSION = 'pilot-consent-v1';
 
 @Injectable()
 export class CandidateConsentService {

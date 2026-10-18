@@ -1,0 +1,12 @@
+{$PILOT_DOMAIN:localhost} {
+    encode zstd gzip
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    }
+    @internal path /metrics /health/dependencies /api/v1/psicometria* /api/lti* /snapshots/*
+    respond @internal 404
+    reverse_proxy frontend:3000
+}
