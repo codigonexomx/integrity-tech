@@ -19,7 +19,7 @@ export function readEnv(path) {
 export function run(command, args, options = {}) {
   const result = spawnSync(command, args, { cwd: root, stdio: ['pipe', 'pipe', 'pipe'], timeout: 180_000, maxBuffer: 20 * 1024 * 1024, ...options });
   if (result.status !== 0) {
-    const phases = String(result.stderr || '').match(/restore-phase: [a-z-]+/g) || [];
+    const phases = String(result.stderr || '').match(/(?:restore|backup)-phase: [a-z-]+/g) || [];
     throw new Error(`Falló ${command} (${args[0] || ''})${phases.length ? `; ${phases.at(-1)}` : ''}; revisa el servicio y sus permisos. No se imprimen secretos ni salidas de contenedores.`);
   }
   return result.stdout;
