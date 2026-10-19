@@ -1,10 +1,11 @@
 'use client';
 
+import { useParams } from 'next/navigation';
+
 import Link from 'next/link';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminShell } from '../../../../../components/staff/AdminShell';
 
-type PageProps = { params: { versionId: string } };
 type Notice = { type: 'success' | 'error'; message: string } | null;
 type ItemVersionOption = { id: string; version: string; status: string; language?: string };
 type ItemOption = {
@@ -49,7 +50,8 @@ function apiError(status: number) {
   return messages[status] || 'No se pudo completar la operación.';
 }
 
-export default function AssessmentVersionDetailPage({ params }: PageProps) {
+export default function AssessmentVersionDetailPage() {
+  const params = useParams<{ versionId: string }>();
   const [detail, setDetail] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [itemBank, setItemBank] = useState<ItemOption[]>([]);

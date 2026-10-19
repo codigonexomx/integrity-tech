@@ -25,7 +25,7 @@ describe('Evaluation SessionService consent gate', () => {
   let service: SessionService;
 
   beforeEach(() => {
-    prisma = {};
+    prisma = { answerSubmission: { findMany: jest.fn().mockResolvedValue([]) } };
     attempts = {
       findAttemptInTenant: jest.fn().mockResolvedValue(attempt),
       findExamInTenant: jest.fn().mockResolvedValue({

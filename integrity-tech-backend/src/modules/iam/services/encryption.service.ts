@@ -11,7 +11,10 @@ export class EncryptionService {
   constructor() {
     // 32 bytes (256 bits) para la clave de cifrado simétrico
     const keyEnv = process.env.ENCRYPTION_KEY;
-    if (keyEnv && keyEnv.length === 64) {
+    if (process.env.NODE_ENV === 'production' && (!/^[a-fA-F0-9]{64}$/.test(keyEnv || '') || (process.env.HMAC_SALT || '').length < 32)) {
+      throw new Error('ENCRYPTION_KEY hexadecimal de 32 bytes y HMAC_SALT de al menos 32 caracteres son obligatorios en producción.');
+    }
+    if (keyEnv && /^[a-fA-F0-9]{64}$/.test(keyEnv)) {
       this.key = Buffer.from(keyEnv, 'hex');
     } else {
       this.logger.warn('DATABASE ENCRYPTION_KEY no configurada o inválida. Usando clave de desarrollo local (insegura).');

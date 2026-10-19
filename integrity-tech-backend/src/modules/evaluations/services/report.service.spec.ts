@@ -2,6 +2,32 @@ import { BadRequestException } from '@nestjs/common';
 import { ReportService } from './report.service';
 
 describe('ReportService audit events', () => {
+  it.each([
+    ['SUBMITTED', 5, 'Pendiente de revisión'],
+    ['IN_PROGRESS', null, 'Pendiente de entrega'],
+    ['COMPLETED', 0, '0 puntos (suma de reactivos)'],
+    ['COMPLETED', 10, '10 puntos (suma de reactivos)'],
+    ['EXPIRED', 5, 'Sin puntuación · tiempo terminado con preguntas pendientes'],
+  ])('keeps report results appropriate for %s, including provisional and zero scores', async (status, score, expected) => {
+    const reports = {
+      findReportAttempt: jest.fn().mockResolvedValue({
+        id: 'attempt-state', examId: 'exam-1', userId: 'candidate-1',
+        organizationId: 'org-1', status, score, scoreDetails: null, logs: [],
+        startedAt: new Date(), submittedAt: null,
+      }),
+      findUserInTenant: jest.fn().mockResolvedValue({ firstName: 'Candidato', lastName: 'Ficticio', email: 'candidate@example.test' }),
+      findExamInTenant: jest.fn().mockResolvedValue({ title: 'Práctica', durationMinutes: 15 }),
+      findPublishedReportTemplateVersion: jest.fn().mockResolvedValue(null),
+    };
+    const service = new ReportService(reports as any, {} as any,
+      { record: jest.fn().mockResolvedValue(undefined) } as any,
+      { buildAttemptTrace: jest.fn().mockResolvedValue({ mode: 'VERSIONED' }) } as any);
+    const result = await service.getAttemptReport('attempt-state', {
+      userId: 'staff-1', organizationId: 'org-1', email: 'staff@example.test', roles: ['recruiter'],
+    });
+    expect(result.overallScore).toBe(expected);
+  });
+
   it('records audit event when staff accesses an attempt report', async () => {
     const reports = {
       findReportAttempt: jest.fn().mockResolvedValue({
@@ -76,6 +102,7 @@ describe('ReportService audit events', () => {
           AUSENCIA_AVARICIA: { name: 'Ausencia de Avaricia', earned: 25, max: 25, percentage: 100 },
           integrityLaboral: {
             assessmentCode: 'EVALUACION_INTEGRIDAD_LABORAL',
+            scoringRevision: '1.1.0',
             title: 'Perfil de Integridad Laboral',
             global: { name: 'Integridad Global', earned: 82, max: 100, percentage: 82 },
           },
@@ -107,10 +134,20 @@ describe('ReportService audit events', () => {
 
     expect((result as any).integrityProfile.title).toBe('Perfil de Integridad Laboral');
     expect((result as any).integrityProfile.global.score).toBe(82);
-    expect((result as any).integrityProfile.strengths.length).toBeGreaterThan(0);
+    expect((result as any).integrityProfile.strengths).toEqual([]);
+    expect((result as any).integrityProfile.notice).toContain('experimental');
     expect((result as any).integrityProfile.interviewQuestions).toEqual(
       expect.arrayContaining([expect.objectContaining({ dimension: 'Justicia' })]),
     );
+  });
+
+  it('withdraws historical integrity results without issuing strengths', () => {
+    const service = new ReportService({} as any, {} as any, {} as any, {} as any);
+    const profile = (service as any).buildIntegrityLaboralProfile({ integrityLaboral: { assessmentCode: 'EVALUACION_INTEGRIDAD_LABORAL', global: { earned: 99, percentage: 99 } } });
+    expect(profile.usable).toBe(false);
+    expect(profile.global.score).toBeNull();
+    expect(profile.strengths).toEqual([]);
+    expect(profile.notice).toContain('incorrecta');
   });
 
   it('does not audit report access when the attempt is not found in tenant', async () => {

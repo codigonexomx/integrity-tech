@@ -41,7 +41,7 @@ export class ReportRepository {
   findExamInTenant(examId: string, organizationId: string) {
     return this.prisma.exam.findFirst({
       where: { id: examId, organizationId },
-      select: { title: true },
+      select: { title: true, durationMinutes: true },
     });
   }
 

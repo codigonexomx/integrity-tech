@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
-import './fixtures/rate-limit-isolation';
+import { clearE2ERateLimitKeys } from './fixtures/rate-limit-isolation';
+
+test.beforeEach(async () => { await clearE2ERateLimitKeys(); });
 import {
   E2E,
   acceptConsent,
@@ -27,7 +29,7 @@ test.describe('Enterprise E2E candidate resilience', () => {
     await page.route('**/api/evaluations/attempts/*/submit', (route) => route.abort('failed'));
 
     await page.goto(`/exam/${candidate.attemptId}`);
-    await expect(page.getByText(/Pregunta/i)).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: /Pregunta/ })).toBeVisible();
     await page.locator('label').first().click();
 
     await expect.poll(() => countQueuedAnswers(page), { timeout: 10_000 }).toBeGreaterThan(0);
@@ -47,7 +49,7 @@ test.describe('Enterprise E2E candidate resilience', () => {
     );
 
     await page.goto(`/exam/${candidate.attemptId}`);
-    await expect(page.getByText(/Pregunta/i)).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: /Pregunta/ })).toBeVisible();
     await page.locator('label').first().click();
 
     await expect.poll(() => countQueuedAnswers(page), { timeout: 10_000 }).toBeGreaterThan(0);

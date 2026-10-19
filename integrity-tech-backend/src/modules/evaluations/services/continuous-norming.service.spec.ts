@@ -13,6 +13,11 @@ describe('ContinuousNormingService tenant isolation', () => {
     service = new ContinuousNormingService(prisma);
   });
 
+  it('never starts a shell or generates norms from untrusted test identifiers', async () => {
+    await expect(service.runContinuousCalibration('$(invalid)')).rejects.toThrow('deshabilitada');
+    expect(prisma.continuousNorm.findFirst).not.toHaveBeenCalled();
+  });
+
   it('queries continuous norms by organization and demographic hierarchy', async () => {
     prisma.continuousNorm.findFirst.mockResolvedValue({
       testId: 'IT2_AC10',

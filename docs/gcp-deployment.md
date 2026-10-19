@@ -1,6 +1,6 @@
 # Guía de Despliegue en Google Cloud Platform (GCP)
-**Para:** Equipo de Ingeniería y Operaciones de Integrity Tech  
-**Estado:** Producción Empresarial  
+**Para:** Equipo de Ingeniería y Operaciones de Integrity Tech
+**Estado:** diseño histórico, no validado para el piloto. Usar [pilot.md](pilot.md); no ejecutar esta guía para iniciar el piloto económico.
 
 ---
 

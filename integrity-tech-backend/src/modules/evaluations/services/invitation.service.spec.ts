@@ -53,6 +53,7 @@ describe('InvitationService audit events', () => {
           },
           candidateInvitation: {
             update: jest.fn().mockResolvedValue(undefined),
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
           },
         }),
       ),
@@ -164,4 +165,16 @@ describe('InvitationService audit events', () => {
       }),
     );
   });
+  it('rejects identity substitution before reserving an invitation', async () => {
+    for (const changes of [{ email: 'other@example.test' }, { candidateName: 'Another person' }]) {
+      await expect(service.claimInvitation({ accessCode: invitation.accessCode, candidateName: invitation.candidateName, email: invitation.email, ...changes })).rejects.toThrow('no coinciden');
+    }
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a concurrent claim instead of creating a second attempt', async () => {
+    prisma.$transaction.mockImplementationOnce(callback => callback({ candidateInvitation: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) } }));
+    await expect(service.claimInvitation({ accessCode: invitation.accessCode, candidateName: invitation.candidateName, email: invitation.email })).rejects.toThrow('ya no está disponible');
+  });
+
 });

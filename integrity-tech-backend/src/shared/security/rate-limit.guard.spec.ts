@@ -3,6 +3,13 @@ import { RateLimitGuard } from './rate-limit.guard';
 import { RATE_LIMIT_KEY } from './rate-limit.decorator';
 
 describe('RateLimitGuard', () => {
+  it('ignores forged forwarded addresses', async () => {
+    const store = buildStore();
+    const guard = buildGuard({ scope: 'auth-login', limit: 1, windowMs: 60000 }, store);
+    await guard.canActivate(mockContext({ ip: '127.0.0.1', body: { email: 'a@b.test' }, headers: { 'x-forwarded-for': '8.8.8.8' } }) as any);
+    expect(store.increment).toHaveBeenCalledWith('auth-login:127.0.0.1:a@b.test', 60000);
+  });
+
   it('blocks login by IP and email after the configured limit', async () => {
     const store = buildStore();
     const guard = buildGuard({ scope: 'auth-login', limit: 2, windowMs: 60_000 }, store);

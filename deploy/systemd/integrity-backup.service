@@ -1,0 +1,16 @@
+[Unit]
+Description=Respaldo cifrado del piloto de Integrity Tech
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=integrity
+Group=integrity
+SupplementaryGroups=docker
+WorkingDirectory=/opt/integrity-tech
+ExecStart=/usr/bin/node /opt/integrity-tech/scripts/backup-pilot.mjs
+UMask=0077
+TimeoutStartSec=15min
+NoNewPrivileges=true
+PrivateTmp=true

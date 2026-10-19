@@ -62,6 +62,9 @@ export type ExamAttemptDto = {
 export type ExamSessionResponse = {
   attemptId: string;
   status: ExamAttemptDto['status'];
+  serverNow?: string;
+  deadlineAt?: string;
+  answers?: Record<string, Record<string, unknown>>;
   startedAt?: string;
   submittedAt?: string | null;
   exam: Pick<ExamDto, 'id' | 'title' | 'durationMinutes'>;
@@ -96,6 +99,7 @@ export type VerifyInvitationResponse = {
   email: string;
   examId: string;
   examTitle: string;
+  durationMinutes?: number;
 };
 
 export type ClaimInvitationRequest = {
@@ -135,6 +139,8 @@ export type StaffLoginResponse = {
     id: string;
     email: string;
     organizationId: string;
+    organizationName?: string;
+    permissions?: string[];
     roles: string[];
   };
 };
@@ -151,6 +157,7 @@ export type CandidateConsentResponse = {
   accepted: boolean;
   consentVersion?: string | null;
   acceptedAt?: string | null;
+  evaluation?: { title: string; durationMinutes: number; questionCount: number };
 };
 
 export type AttemptListItem = {

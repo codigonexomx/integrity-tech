@@ -17,10 +17,10 @@ export class ResponsesController {
 
   @ApiOperation({
     summary: 'Enviar respuesta de una pregunta de examen',
-    description: 'Encola la respuesta del alumno de forma asíncrona en la cola BullMQ answers-queue y retorna un ID de procesamiento (jobId).',
+    description: 'Guarda y puntúa la respuesta de forma transaccional antes de confirmar recepción.',
   })
   @ApiParam({ name: 'attemptId', description: 'ID único del intento de evaluación (UUIDv7)', type: String })
-  @ApiResponse({ status: 202, description: 'La respuesta fue aceptada en la cola de procesamiento.' })
+  @ApiResponse({ status: 202, description: 'La respuesta fue guardada y puntuada.' })
   @Post('attempts/:attemptId/submit')
   @UseGuards(JwtAuthGuard, AttemptOwnerGuard, RateLimitGuard)
   @RateLimit({ scope: 'answer-submit', limit: 120, windowMs: 60_000 })

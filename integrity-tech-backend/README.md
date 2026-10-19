@@ -1,5 +1,7 @@
 # Integrity-Tech | Platform API
 
+> Piloto actual: seguir [docs/pilot.md](../docs/pilot.md). La analítica científica experimental, CAT, IGA y LTI no están disponibles; las descripciones históricas siguientes no acreditan capacidades productivas ni validez científica.
+
 ## Visión del Proyecto
 Integrity-Tech es un ecosistema SaaS diseñado para la gestión integral de evaluaciones de alto impacto. Nuestra arquitectura permite procesar desde pruebas psicométricas complejas y evaluaciones de integridad conductual hasta exámenes académicos estandarizados, garantizando siempre la máxima seguridad, integridad de datos y escalabilidad.
 

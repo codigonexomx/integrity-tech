@@ -1,348 +1,190 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useExamStore } from '../../../store/exam.store';
 import { useSecureTimer } from '../../../hooks/useSecureTimer';
-import { useProctoring } from '../../../hooks/useProctoring';
 import { syncEngine } from '../../../services/sync-engine';
-import { analyticsService } from '../../../services/analytics';
-import { TopNavigation } from '../../../components/navigation/TopNavigation';
 import { QuestionRenderer } from '../../../components/exam/QuestionRenderer';
-import { ProctoringMonitor } from '../../../components/exam/ProctoringMonitor';
 import { FeedbackLayer } from '../../../components/exam/FeedbackLayer';
-import { ProctoringCamera } from '../../../components/exam/ProctoringCamera';
-import { QuestionDto } from '../../../types/exam-contract';
-import { apiClient, ApiClientError } from '../../../services/api-client';
+import { apiClient } from '../../../services/api-client';
+import { candidateErrorMessage, readCandidateAnswers, reconcileCandidateAnswers } from '../../../services/candidate-experience';
 import type { CandidateConsentResponse, ExamSessionResponse } from '../../../generated/api/types';
 
-const CONSENT_VERSION = 'candidate-consent-v1';
+export default function ExamTakingPage() {
+  const { attemptId } = useParams<{ attemptId: string }>();
+  const answers = useExamStore(s => s.answers);
+  const isOffline = useExamStore(s => s.isOffline);
+  const [session, setSession] = useState<ExamSessionResponse | null>(null);
+  const [preview, setPreview] = useState<CandidateConsentResponse['evaluation']>();
+  const [consented, setConsented] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [index, setIndex] = useState(0);
+  const [feedback, setFeedback] = useState(false);
+  const [pending, setPending] = useState(0);
+  const [confirming, setConfirming] = useState(false);
+  const closing = useRef(false);
+  const requestVersion = useRef(0);
+  const initializationVersion = useRef(0);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const questionHeading = useRef<HTMLHeadingElement>(null);
 
-function getProfessionalErrorMessage(status: number, fallback: string) {
-  const messages: Record<number, string> = {
-    401: 'Tu sesión expiró o no es válida. Vuelve a ingresar con tu enlace de evaluación.',
-    403: 'No tienes autorización para acceder a esta evaluación.',
-    409: 'El estado actual del intento no permite realizar esta acción.',
-    429: 'Hay demasiadas solicitudes en este momento. Espera unos minutos e inténtalo nuevamente.',
-  };
-  return messages[status] || fallback;
-}
-
-export default function ExamTakingPage({ params }: { params: { attemptId: string } }) {
-  const attemptId = params.attemptId;
-  const startExam = useExamStore((state) => state.startExam);
-  const status = useExamStore((state) => state.status);
-  const setStatus = useExamStore((state) => state.setStatus);
-  const isOffline = useExamStore((state) => state.isOffline);
-  const answers = useExamStore((state) => state.answers);
-
-  const [examSession, setExamSession] = useState<{
-    attemptId?: string;
-    exam: { id: string; title: string; durationMinutes?: number | null };
-    questions: QuestionDto[];
-    status: string;
-  } | null>(null);
-  const [isLoadingSession, setIsLoadingSession] = useState(true);
-  const [isAcceptingConsent, setIsAcceptingConsent] = useState(false);
-  const [consentAccepted, setConsentAccepted] = useState(false);
-  const [sessionError, setSessionError] = useState<string | null>(null);
-  const [consentError, setConsentError] = useState<string | null>(null);
-  const [initialServerTimeMs] = useState(Date.now());
-  const [endTimeMs, setEndTimeMs] = useState(Date.now() + 10 * 60 * 1000);
-  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
-  const [showFeedbackSurvey, setShowFeedbackSurvey] = useState(false);
-
-  const loadSession = useCallback(async () => {
-    try {
-      const data = await apiClient.get<ExamSessionResponse>(`/evaluations/attempts/${attemptId}/session`);
-      if (!Array.isArray(data.questions) || data.questions.length === 0) {
-        throw new Error('La evaluación no tiene preguntas configuradas.');
-      }
-
-      setExamSession(data);
-      startExam(attemptId, data.exam.id);
-      setStatus(data.status === 'SUBMITTED' ? 'SUBMITTED' : 'IN_PROGRESS');
-      const durationMinutes = data.exam.durationMinutes || 10;
-      setEndTimeMs(Date.now() + durationMinutes * 60 * 1000);
-      analyticsService.track('assessment_started', { attemptId, examId: data.exam.id });
-    } catch (err: any) {
-      const fallback = err.message || 'No se pudo cargar la sesión de examen.';
-      setSessionError(err instanceof ApiClientError ? getProfessionalErrorMessage(err.status, fallback) : fallback);
-    } finally {
-      setIsLoadingSession(false);
-    }
-  }, [attemptId, startExam, setStatus]);
-
-  // Inicializar el store de Zustand con los parámetros de la sesión
-  useEffect(() => {
-    async function verifyConsentAndLoadSession() {
-      try {
-        const data = await apiClient.get<CandidateConsentResponse>(`/evaluations/attempts/${attemptId}/consent`);
-        if (!data.accepted) {
-          setConsentAccepted(false);
-          setIsLoadingSession(false);
-          return;
+  const load = useCallback(async () => {
+    const version = ++requestVersion.current;
+    const before = await syncEngine?.pendingAnswers(attemptId) || [];
+    const data = await apiClient.get<ExamSessionResponse>(`/evaluations/attempts/${attemptId}/session`);
+    if (version !== requestVersion.current) return;
+    const cached = readCandidateAnswers(attemptId);
+    const pendingNow = await syncEngine?.pendingAnswers(attemptId) || [];
+    if (data.status === 'IN_PROGRESS') {
+      for (const question of data.questions) {
+        if (cached[question.id] && !pendingNow.some(a => a.questionId === question.id)
+          && JSON.stringify(cached[question.id]) !== JSON.stringify(data.answers?.[question.id])) {
+          await syncEngine?.queueAnswer(attemptId, question.id, cached[question.id], undefined, question.itemVersionId);
         }
-
-        setConsentAccepted(true);
-        await loadSession();
-      } catch (err: any) {
-        const fallback = err.message || 'No se pudo preparar la evaluación.';
-        setSessionError(err instanceof ApiClientError ? getProfessionalErrorMessage(err.status, fallback) : fallback);
-        setIsLoadingSession(false);
       }
     }
+    const after = await syncEngine?.pendingAnswers(attemptId) || [];
+    if (version !== requestVersion.current) return;
+    useExamStore.setState(local => ({ attemptId, examId: data.exam.id,
+      answers: reconcileCandidateAnswers(attemptId, data.answers || {}, { attemptId, answers: { ...cached, ...(local.attemptId === attemptId ? local.answers : {}) } }, before, after),
+      status: data.status === 'COMPLETED' || data.status === 'SUBMITTED' ? 'SUBMITTED' : data.status === 'EXPIRED' ? 'EXPIRED' : 'IN_PROGRESS',
+    }));
+    setSession(data); setPending(after.length);
+    const position = Number(localStorage.getItem(`candidate-position:${attemptId}`) || 0);
+    setIndex(Number.isInteger(position) ? Math.max(0, Math.min(position, data.questions.length - 1)) : 0);
+  }, [attemptId]);
 
-    verifyConsentAndLoadSession();
-  }, [attemptId, loadSession]);
-
-  const acceptConsent = async () => {
+  const initialize = useCallback(async () => {
+    const version = ++initializationVersion.current;
+    setLoading(true); setError('');
     try {
-      setIsAcceptingConsent(true);
-      setConsentError(null);
-      await apiClient.post<CandidateConsentResponse>(`/evaluations/attempts/${attemptId}/consent`, { consentVersion: CONSENT_VERSION });
-
-      setConsentAccepted(true);
-      setIsLoadingSession(true);
-      await loadSession();
-    } catch (err: any) {
-      const fallback = err.message || 'No se pudo registrar el consentimiento.';
-      setConsentError(err instanceof ApiClientError ? getProfessionalErrorMessage(err.status, fallback) : fallback);
-    } finally {
-      setIsAcceptingConsent(false);
-    }
-  };
-
-  // Tracking de navegación de preguntas para embudos de drop-off
-  const questions = examSession?.questions || [];
-  const activeQuestion = questions[activeQuestionIndex];
-  useEffect(() => {
-    if (activeQuestion) {
-      analyticsService.track('question_viewed', {
-        attemptId,
-        questionId: activeQuestion.id,
-        questionIndex: activeQuestionIndex,
-        questionType: activeQuestion.type,
+      if (!useExamStore.persist.hasHydrated()) await new Promise<void>(resolve => {
+        const off = useExamStore.persist.onFinishHydration(() => { off(); resolve(); });
       });
-    }
-  }, [activeQuestionIndex, attemptId, activeQuestion]);
+      const consent = await apiClient.get<CandidateConsentResponse>(`/evaluations/attempts/${attemptId}/consent`);
+      if (version !== initializationVersion.current) return;
+      setPreview(consent.evaluation); setConsented(consent.accepted);
+      if (consent.accepted) await load();
+    } catch (e) { if (version === initializationVersion.current) setError(candidateErrorMessage(e)); }
+    finally { if (version === initializationVersion.current) setLoading(false); }
+  }, [attemptId, load]);
 
-  // Manejo de la expiración de tiempo (Auto-Submit)
-  const handleTimeUp = () => {
-    if (status === 'IN_PROGRESS') {
-      setStatus('EXPIRED');
-      console.warn('El tiempo del examen ha expirado. Forzando envío automático...');
-      triggerFinalSubmit();
-    }
-  };
+  useEffect(() => {
+    setSession(null); setConfirming(false);
+    void initialize();
+    const invalidateRequests = () => { requestVersion.current++; initializationVersion.current++; };
+    return invalidateRequests;
+  }, [initialize]);
 
-  // Manejo de alarmas por alteración del reloj local
-  const handleClockTampered = () => {
-    alert('⚠️ Se ha detectado una alteración en el reloj de tu dispositivo. El examen se guardará y bloqueará.');
-    handleTimeUp();
-  };
+  useEffect(() => {
+    let active = true;
+    const interval = setInterval(() => {
+      syncEngine?.pendingAnswers(attemptId).then(q => { if (active) setPending(q.length); }).catch(() => {
+        if (active) setError('No pudimos comprobar el guardado en este navegador. No cierres la página y contacta a la organización que te invitó.');
+      });
+    }, 500);
+    return () => { active = false; clearInterval(interval); };
+  }, [attemptId]);
 
-  // Hook del Temporizador Seguro
-  const { formattedTime, isExpired } = useSecureTimer({
-    initialServerTimeMs,
-    endTimeMs,
-    onTimeUp: handleTimeUp,
-    onTamperDetected: handleClockTampered,
-  });
+  useEffect(() => { if (confirming) reviewHeading.current?.focus(); }, [confirming]);
 
-  // Activar monitoreo silencioso de Proctoring (inactividad e integridad de pestaña)
-  useProctoring({ idleTimeoutMs: 60000 });
+  function navigate(position: number) {
+    setIndex(position); localStorage.setItem(`candidate-position:${attemptId}`, String(position));
+    setError(''); questionHeading.current?.focus();
+  }
 
-  // Envío final del examen
-  const triggerFinalSubmit = async () => {
+  async function accept() {
+    setBusy(true); setError('');
     try {
-      const flushed = await syncEngine?.flushAnswers(6000);
-      if (flushed === false) {
-        throw new Error('Aún hay respuestas pendientes de sincronización. Espera unos segundos y vuelve a finalizar.');
-      }
+      await apiClient.post(`/evaluations/attempts/${attemptId}/consent`, { consentVersion: 'pilot-consent-v1' });
+      setConsented(true); await load();
+    } catch (e) { setError(candidateErrorMessage(e)); } finally { setBusy(false); }
+  }
 
-      await apiClient.post(`/evaluations/attempts/${attemptId}/finalize`);
-
-      setStatus('SUBMITTED');
-      setShowFeedbackSurvey(true);
-      analyticsService.track('assessment_submitted', { attemptId });
-      console.log('Respuestas locales al finalizar:', answers);
-    } catch (err: any) {
-      const fallback = err.message || 'No se pudo finalizar la evaluación. Revisa tu conexión e inténtalo de nuevo.';
-      alert(err instanceof ApiClientError ? getProfessionalErrorMessage(err.status, fallback) : fallback);
+  const missing = session?.questions.filter(q => !answers[q.id] || (typeof answers[q.id].text === 'string' && !answers[q.id].text.trim())) || [];
+  function review() {
+    setError('');
+    if (missing.length) {
+      navigate(session!.questions.findIndex(q => q.id === missing[0].id));
+      setError(missing.length === 1 ? 'Falta 1 pregunta por responder. Complétala antes de entregar.' : `Faltan ${missing.length} preguntas por responder. Completa todas antes de entregar.`);
+      return;
     }
-  };
-
-  if (isLoadingSession) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans">
-        <TopNavigation />
-        <div className="text-sm text-slate-500 font-medium">Cargando evaluación asignada...</div>
-      </div>
-    );
+    setConfirming(true);
+  }
+  async function finish(expired = false) {
+    if (closing.current) return;
+    closing.current = true; setBusy(true); setError('');
+    try {
+      if (!expired && await syncEngine?.flushAnswers(10000, attemptId) === false) {
+        setError('Hay respuestas pendientes de guardar. Revisa tu conexión y vuelve a entregar. Tus respuestas permanecen en este equipo.');
+        return;
+      }
+      const result = await apiClient.post<{ status: string }>(`/evaluations/attempts/${attemptId}/finalize`);
+      useExamStore.getState().setStatus(result.status === 'COMPLETED' ? 'SUBMITTED' : 'EXPIRED');
+      setSession(current => current && ({ ...current, status: result.status }));
+      setFeedback(!expired && result.status === 'COMPLETED'); setConfirming(false);
+    } catch (e) { setError(candidateErrorMessage(e)); }
+    finally { setBusy(false); closing.current = false; }
   }
 
-  if (!consentAccepted && !examSession) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans p-6 pt-20">
-        <TopNavigation />
-        <div className="max-w-2xl bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h1 className="text-lg font-bold text-white">Consentimiento informado</h1>
-          <div className="mt-4 space-y-3 text-sm text-slate-300 leading-relaxed">
-            <p>
-              Autorizo realizar esta evaluación como parte de un proceso de selección o valoración profesional.
-            </p>
-            <p>
-              Acepto que mis respuestas y datos asociados al intento sean tratados para generar resultados, métricas y
-              reportes relacionados con la evaluación.
-            </p>
-            <p>
-              Entiendo que la sesión puede registrar señales de monitoreo o proctoring cuando aplique, como eventos de
-              navegación, actividad de sesión o metadata técnica.
-            </p>
-            <p>
-              Comprendo que los resultados podrán ser usados por la organización solicitante como una herramienta de
-              apoyo para la toma de decisiones dentro del proceso correspondiente.
-            </p>
-            <p className="text-xs text-slate-500">Versión del consentimiento: {CONSENT_VERSION}</p>
-          </div>
-          {consentError && <p className="mt-4 text-sm text-red-400">{consentError}</p>}
-          <button
-            type="button"
-            onClick={acceptConsent}
-            disabled={isAcceptingConsent}
-            className="mt-6 w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isAcceptingConsent ? 'Registrando...' : 'Acepto y continuar'}
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const timer = useSecureTimer({ initialServerTimeMs: Date.parse(session?.serverNow || '') || 0, endTimeMs: Date.parse(session?.deadlineAt || '') || 0,
+    enabled: session?.status === 'IN_PROGRESS', onTimeUp: () => {
+      setSession(current => current && ({ ...current, status: 'EXPIRED' })); setConfirming(false);
+      void finish(true);
+    } });
+  const terminal = session?.status === 'COMPLETED' || session?.status === 'EXPIRED' || session?.status === 'SUBMITTED';
+  const answeredCount = (session?.questions.length || 0) - missing.length;
 
-  if (sessionError || !examSession) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans p-6 pt-20">
-        <TopNavigation />
-        <div className="max-w-md text-center bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h1 className="text-lg font-bold text-white">No se pudo abrir la evaluación</h1>
-          <p className="text-sm text-slate-400 mt-2">{sessionError || 'La sesión no está disponible.'}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
-      {/* CABECERA (Header) - Responsiva para Móvil/Escritorio */}
-      <header className="sticky top-0 z-10 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 md:px-6 py-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 md:gap-0">
-        <div className="w-full md:w-auto flex items-center gap-3.5">
-          <img 
-            src="/integrity-logo-2.png" 
-            alt="Logo" 
-            className="w-7 h-7 object-contain rounded-md flex-shrink-0"
-          />
-          <div>
-            <h1 className="text-sm font-bold text-slate-200 tracking-wide text-left">{examSession.exam.title}</h1>
-            <p className="text-3xs text-slate-500 mt-0.5">ID de Intento: {attemptId}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto border-t border-slate-800/40 md:border-none pt-2.5 md:pt-0">
-          {/* Indicador de Estado de Conexión */}
-          {isOffline ? (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-3xs font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              Modo Offline
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-3xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Sincronizado
-            </span>
-          )}
-
-          {/* Temporizador Seguro */}
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-950 border border-slate-800 rounded-lg">
-            <span className="text-3xs text-slate-500 uppercase font-mono">Restan:</span>
-            <span className={`font-mono text-xs font-bold ${isExpired ? 'text-red-500' : 'text-indigo-400'}`}>
-              {formattedTime}
-            </span>
-          </div>
-        </div>
+  return <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-4 [&_button:focus-visible]:outline-indigo-300">
+    <div className="mx-auto max-w-3xl space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+        <div><p className="text-sm text-indigo-300">Código Nexo · Integrity Tech</p><h1 className="text-xl font-bold">{session?.exam.title || preview?.title || 'Evaluación asignada'}</h1></div>
+        {session && !terminal && <p className="font-mono" aria-label="Tiempo restante">Restan: {timer.formattedTime}</p>}
       </header>
-
-      {/* ÁREA DE CONTENIDO */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-6 flex flex-col gap-6">
-        
-        {/* Encuesta NPS de Retroalimentación en Caliente (Product-Market Fit) */}
-        {showFeedbackSurvey ? (
-          <FeedbackLayer 
-            attemptId={attemptId}
-            onFeedbackSubmitted={() => setShowFeedbackSurvey(false)}
-          />
-        ) : status !== 'IN_PROGRESS' ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl gap-4 my-auto">
-            <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center text-3xl">
-              {status === 'SUBMITTED' ? '✅' : '⏳'}
+      {loading ? <p role="status">Cargando evaluación…</p> : <>
+        {error && <div role="alert" className="space-y-3 rounded-lg border border-amber-600 bg-amber-950 p-4 text-amber-100"><p>{error}</p>
+          {!session && <div className="flex flex-wrap gap-3"><button disabled={busy} onClick={() => void initialize()} className="min-h-11 rounded-lg border border-amber-300 px-4 py-3">Reintentar</button><Link href="/exam/login" className="inline-block min-h-11 rounded-lg border border-amber-300 px-4 py-3">Volver al acceso</Link></div>}
+          {terminal && session?.status === 'EXPIRED' && <button disabled={busy} onClick={() => void finish(true)} className="min-h-11 rounded-lg border border-amber-300 px-4 py-3">Reintentar cierre</button>}
+        </div>}
+        {!consented && !error && <section className="rounded-xl bg-slate-900 p-6 space-y-4">
+          <h2 className="text-xl font-bold">Antes de comenzar</h2>
+          <p>{preview?.questionCount ? `${preview.questionCount} preguntas` : 'Cuestionario asignado'} · {preview?.durationMinutes || 10} minutos para responder. El tiempo empieza al pulsar «Acepto e iniciar evaluación».</p>
+          <ul className="list-disc space-y-2 pl-5 text-slate-300"><li>Puedes volver a las preguntas y corregir tus respuestas antes de entregar.</li><li>Debes responder todas las preguntas para confirmar una entrega completa. No podrás modificarla después.</li><li>Si la conexión falla, conserva esta página y este navegador. La entrega requiere confirmación del servidor; el tiempo continúa corriendo.</li><li>No se solicita cámara ni micrófono.</li></ul>
+          <h3 className="text-lg font-semibold">Consentimiento informado</h3>
+          <p>Acepto participar en una demostración con prácticas ficticias para comprobar el funcionamiento de la plataforma. No miden aptitud laboral.</p>
+          <p>Acepto registrar mis respuestas y los datos asociados al intento para generar reportes descriptivos accesibles a la organización que me invitó.</p>
+          <p>La cámara y la telemetría de navegación están desactivadas. Se conserva el registro técnico necesario para operar la evaluación.</p>
+          <p>Los reportes no determinan honestidad ni aptitud y no deben utilizarse para aceptar o rechazar candidatos.</p>
+          <p className="text-sm text-slate-300">Aviso de demostración: pilot-consent-v1. Para un proceso real deben acordarse previamente el responsable y las condiciones de datos.</p>
+          <div className="flex flex-wrap gap-3"><button disabled={busy} onClick={() => void accept()} className="min-h-11 rounded-lg bg-indigo-600 px-5 py-3 disabled:opacity-50">{busy ? 'Iniciando…' : 'Acepto e iniciar evaluación'}</button><Link href="/exam/login" className="inline-block min-h-11 rounded-lg border border-slate-600 px-4 py-3">No iniciar ahora</Link></div>
+        </section>}
+        {terminal ? <section className="rounded-xl bg-slate-900 p-6 space-y-4">
+          <h2 className="text-xl font-bold">{session.status === 'COMPLETED' ? 'Evaluación entregada' : session.status === 'EXPIRED' ? 'Tiempo terminado' : 'Entrega pendiente de revisión'}</h2>
+          <p>{session.status === 'COMPLETED' ? 'La entrega está confirmada. Tus respuestas y el resultado están guardados y no pueden modificarse. Ya puedes cerrar esta página.' : 'Se conservaron las respuestas recibidas. No se publica una puntuación incompleta. Contacta a la organización que te invitó si necesitas ayuda.'}</p>
+          {pending > 0 && <p role="status">Quedan {pending} respuestas locales sin confirmar; no forman parte de un resultado confirmado. No borres los datos de este navegador y contacta a la organización.</p>}
+          {feedback && <><button onClick={() => setFeedback(false)} className="min-h-11 rounded-lg border border-slate-600 px-4 py-3">Omitir encuesta</button><FeedbackLayer attemptId={attemptId} onFeedbackSubmitted={() => setFeedback(false)} /></>}
+          <button onClick={() => { localStorage.removeItem(`candidate-token:${attemptId}`); if (!pending) localStorage.removeItem(`candidate-answers:${attemptId}`); useExamStore.getState().resetExam(); window.location.replace('/exam/login'); }} className="min-h-11 inline-block rounded-lg border border-slate-600 px-4 py-3">Salir de la evaluación</button>
+        </section> : session && <>
+          <p role="status" className="text-sm text-slate-300">{isOffline ? 'Sin conexión · respuestas guardadas en este equipo' : pending ? `${pending} ${pending === 1 ? 'respuesta pendiente' : 'respuestas pendientes'} de sincronización` : 'Sin respuestas pendientes de sincronización'} · {answeredCount} de {session.questions.length} respondidas · Pregunta {index + 1} de {session.questions.length}</p>
+          {confirming ? <section role="region" aria-labelledby="review-heading" className="rounded-xl border border-indigo-400 bg-slate-900 p-6 space-y-4">
+            <h2 id="review-heading" ref={reviewHeading} tabIndex={-1} className="text-xl font-bold">Revisa antes de entregar</h2>
+            <p>Has respondido {answeredCount} de {session.questions.length} preguntas. Al confirmar no podrás cambiar las respuestas. El tiempo continúa corriendo.</p>
+            {pending > 0 && <p>Esperaremos la confirmación de tus respuestas antes de completar la entrega.</p>}
+            <div className="flex flex-wrap gap-3"><button disabled={busy} onClick={() => { setConfirming(false); setError(''); }} className="min-h-11 rounded-lg border border-slate-600 px-5 py-3">Volver a revisar</button><button disabled={busy} onClick={() => void finish()} className="min-h-11 rounded-lg bg-indigo-600 px-5 py-3 disabled:opacity-50">{busy ? 'Confirmando entrega…' : 'Confirmar entrega'}</button></div>
+          </section> : <>
+            <h2 ref={questionHeading} tabIndex={-1} className="sr-only">Pregunta {index + 1} de {session.questions.length}</h2>
+            <fieldset disabled={busy}><QuestionRenderer question={session.questions[index]} /></fieldset>
+            <div className="flex flex-wrap justify-between gap-3"><button disabled={index === 0 || busy} onClick={() => navigate(index - 1)} className="min-h-11 rounded-lg border border-slate-700 px-5 py-3 disabled:opacity-40">Anterior</button>
+              {index < session.questions.length - 1 ? <button disabled={busy} onClick={() => navigate(index + 1)} className="min-h-11 rounded-lg bg-slate-800 px-5 py-3">Siguiente</button> : <button disabled={busy} onClick={review} className="min-h-11 rounded-lg bg-indigo-600 px-5 py-3 disabled:opacity-40">Finalizar y Entregar</button>}
             </div>
-            <h2 className="text-xl font-bold text-slate-100">
-              {status === 'SUBMITTED' ? 'Examen Entregado' : 'Tiempo Expirado'}
-            </h2>
-            <p className="text-sm text-slate-400 max-w-md">
-              El examen ha sido cerrado y tus respuestas se encuentran procesadas de forma segura. No puedes realizar más modificaciones.
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* Indicador de Navegación de Preguntas (Minimalista y Unificado) */}
-            <div className="flex justify-center items-center py-3 border-b border-slate-900">
-              <span className="text-2xs uppercase tracking-widest font-mono text-slate-500 font-semibold">
-                Pregunta <span className="text-indigo-400 font-bold text-sm mx-1">{activeQuestionIndex + 1}</span> de <span className="text-slate-300 font-bold text-sm mx-1">{questions.length}</span>
-              </span>
-            </div>
-
-            {/* Renderizador de Pregunta Activa */}
-            <div className="flex-1">
-              {activeQuestion && (
-                <QuestionRenderer question={activeQuestion} />
-              )}
-            </div>
-
-            {/* Supervisión Activa por Cámara (Webcam Proctoring) - Ubicación Inline Perfecta */}
-            <ProctoringCamera attemptId={attemptId} activeQuestionIndex={activeQuestionIndex} />
-
-            {/* Botones de Navegación del Examen */}
-            <div className="flex justify-between items-center pt-4 border-t border-slate-900">
-              <button
-                disabled={activeQuestionIndex === 0}
-                onClick={() => setActiveQuestionIndex((prev) => prev - 1)}
-                className="px-6 py-2.5 rounded-lg border border-slate-800 text-slate-400 text-sm font-medium hover:bg-slate-900/50 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
-              >
-                Anterior
-              </button>
-
-              {activeQuestionIndex < questions.length - 1 ? (
-                <button
-                  onClick={() => setActiveQuestionIndex((prev) => prev + 1)}
-                  className="px-6 py-2.5 rounded-lg bg-slate-800 text-slate-200 text-sm font-medium hover:bg-slate-700 transition-all cursor-pointer"
-                >
-                  Siguiente
-                </button>
-              ) : (
-                <button
-                  onClick={triggerFinalSubmit}
-                  className="px-8 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 transition-all cursor-pointer"
-                >
-                  Finalizar y Entregar
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </main>
-
-      {/* Alerta de Auditoría de Proctoring de Alto Riesgo */}
-      <ProctoringMonitor />
+          </>}
+        </>}
+      </>}
+      <aside className="border-t border-slate-800 pt-4 text-sm text-slate-300"><p>¿Necesitas ayuda? Contacta a la organización por el mismo medio en que recibiste la invitación.</p><p className="mt-2">Para volver a este intento, abre el enlace original en este mismo navegador. No borres sus datos mientras haya respuestas pendientes.</p></aside>
     </div>
-  );
+  </main>;
 }

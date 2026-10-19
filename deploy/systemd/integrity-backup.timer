@@ -1,0 +1,11 @@
+[Unit]
+Description=Horario propuesto de respaldo del piloto
+
+[Timer]
+OnCalendar=*-*-* 04:00:00 America/Mexico_City
+Persistent=true
+RandomizedDelaySec=5min
+Unit=integrity-backup.service
+
+[Install]
+WantedBy=timers.target

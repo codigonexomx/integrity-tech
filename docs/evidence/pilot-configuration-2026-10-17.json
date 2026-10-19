@@ -1,0 +1,51 @@
+{
+  "mode": "remote_configuration_only",
+  "checks": [
+    {
+      "name": "Node 22 o superior",
+      "pass": true
+    },
+    {
+      "name": "Entorno sin permisos de grupo u otros",
+      "pass": true
+    },
+    {
+      "name": "Secretos aleatorios de 32 bytes en hexadecimal",
+      "pass": true
+    },
+    {
+      "name": "Secretos distintos para cada finalidad",
+      "pass": true
+    },
+    {
+      "name": "Organización y correo de administración definidos",
+      "pass": true
+    },
+    {
+      "name": "Origen HTTPS coherente con dominio sin rutas ni credenciales",
+      "pass": true
+    },
+    {
+      "name": "Dominio remoto y correo no ficticios",
+      "pass": true
+    },
+    {
+      "name": "Puertos públicos HTTPS y HTTP estándar",
+      "pass": true
+    },
+    {
+      "name": "Gateway configurado para escuchar en el servidor",
+      "pass": true
+    },
+    {
+      "name": "Compose válido sin mostrar secretos",
+      "pass": true
+    }
+  ],
+  "ready": true,
+  "pending": [
+    "Verificación DNS, certificado y acceso externo en el servidor definitivo",
+    "Condiciones de datos y responsables aprobados",
+    "Recuperación y respaldo externo comprobados en ese servidor"
+  ]
+}

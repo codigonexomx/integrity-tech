@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: integrity-tech-backend/package-lock.json
 
@@ -54,8 +54,7 @@ jobs:
         run: npm run build
 
       - name: Production dependency audit
-        run: npm audit --omit=dev
-        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
 
   frontend:
     name: Frontend checks
@@ -70,7 +69,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: integrity-tech-frontend/package-lock.json
 
@@ -83,6 +82,9 @@ jobs:
       - name: Sync engine tests
         run: npm run test:sync-engine
 
+      - name: API client and deployment config tests
+        run: npm run test:api-client && npm run test:deployment-config && npm run test:candidate-experience
+
       - name: Build
         run: npm run build
         env:
@@ -93,8 +95,7 @@ jobs:
           NEXT_PUBLIC_BUILD_DATE: ci
 
       - name: Production dependency audit
-        run: npm audit --omit=dev
-        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
 
   docker:
     name: Docker builds
@@ -106,15 +107,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build backend image
-        run: docker build -t integrity-tech-backend:ci ./integrity-tech-backend
+      - name: Setup Node for pilot tooling
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
-      - name: Build frontend image
-        run: docker build -t integrity-tech-frontend:ci ./integrity-tech-frontend
+      - name: Prepare isolated pilot configuration
+        run: node scripts/setup-pilot.mjs
+
+      - name: Build pilot images
+        run: docker compose --env-file .env.pilot -f docker-compose.pilot.yml build
+
+      - name: Full isolated recovery drill
+        run: node scripts/rehearse-recovery.mjs
+
+      - name: Upload recovery verification without credentials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-recovery-verification
+          path: output/recovery-readiness/verification.json
+          if-no-files-found: ignore
 
   e2e:
     name: Enterprise E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - backend
       - frontend
@@ -179,7 +196,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install backend dependencies
         working-directory: integrity-tech-backend
@@ -269,7 +286,10 @@ jobs:
           cat .ci-logs/backend-smoke.log || true
 
       - name: Install PostgreSQL client tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
 
       - name: Backup and restore smoke validation
         working-directory: integrity-tech-backend

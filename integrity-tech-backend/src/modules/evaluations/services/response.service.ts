@@ -69,7 +69,7 @@ export class ResponseService {
 
     return {
       status: 'accepted',
-      message: 'La respuesta ha sido recibida y se encuentra en cola para evaluación.',
+      message: 'La respuesta ha sido guardada y puntuada.',
       jobId: result.jobId,
     };
   }

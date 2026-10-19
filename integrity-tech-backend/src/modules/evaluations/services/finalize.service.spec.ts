@@ -12,7 +12,7 @@ describe('FinalizeService audit events', () => {
       markSubmitted: jest.fn().mockResolvedValue(undefined),
     };
     const answersProcessor = {
-      consolidateAttemptScore: jest.fn().mockResolvedValue(undefined),
+      closeAttempt: jest.fn().mockResolvedValue('COMPLETED'),
     };
     const auditService = {
       record: jest.fn().mockResolvedValue(undefined),

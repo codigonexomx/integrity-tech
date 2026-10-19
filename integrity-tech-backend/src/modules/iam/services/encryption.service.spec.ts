@@ -16,6 +16,8 @@ describe('EncryptionService', () => {
     service = module.get<EncryptionService>(EncryptionService);
   });
 
+  afterEach(() => { delete process.env.ENCRYPTION_KEY; delete process.env.HMAC_SALT; });
+
   it('debe estar definido', () => {
     expect(service).toBeDefined();
   });

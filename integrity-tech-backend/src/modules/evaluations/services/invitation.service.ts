@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { randomInt } from 'crypto';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { AUDIT_ACTIONS, AuditRequestMetadata } from '../../audit/audit-event.types';
@@ -24,7 +24,7 @@ export class InvitationService {
   ) {}
 
   async createInvitation(user: SessionUser, body: CreateInvitationDto, metadata: AuditRequestMetadata = {}) {
-    this.logger.log(`Generando clave de acceso para candidato: ${body.candidateName} (${body.email})`);
+    this.logger.log('Generando invitación de candidato.');
 
     const exam = await this.resolveExamForInvitation(body.examId, user);
     const accessCode = await this.generateUniqueAccessCode();
@@ -90,6 +90,7 @@ export class InvitationService {
       email: invitation.email,
       examId: invitation.examId,
       examTitle: exam?.title || 'Evaluación asignada',
+      durationMinutes: exam?.durationMinutes || 10,
     };
   }
 
@@ -107,6 +108,9 @@ export class InvitationService {
       throw error;
     }
 
+    if (body.email.trim().toLowerCase() !== invitation.email.trim().toLowerCase() || body.candidateName.trim() !== invitation.candidateName.trim()) {
+      throw new BadRequestException('Los datos no coinciden con la invitación verificada. Vuelve a verificar tu clave.');
+    }
     const exam = await this.invitations.findExamForInvitation(invitation.examId, invitation.organizationId);
     if (!exam) {
       throw new BadRequestException('La evaluación asignada ya no existe.');
@@ -117,10 +121,15 @@ export class InvitationService {
     );
 
     const result = await this.prisma.$transaction(async (tx) => {
-      const nameParts = (body.candidateName || invitation.candidateName || 'Candidato').trim().split(/\s+/);
+      const reserved = await tx.candidateInvitation.updateMany({
+        where: { id: invitation.id, status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        data: { status: 'CLAIMING' },
+      });
+      if (reserved.count !== 1) throw new ConflictException('La invitación ya no está disponible para iniciar un nuevo intento.');
+      const nameParts = invitation.candidateName.trim().split(/\s+/);
       const firstName = nameParts[0] || 'Candidato';
       const lastName = nameParts.slice(1).join(' ') || 'Externo';
-      const email = (body.email || invitation.email).trim().toLowerCase();
+      const email = invitation.email.trim().toLowerCase();
 
       let candidate = await tx.user.findFirst({
         where: {
@@ -147,7 +156,7 @@ export class InvitationService {
           assessmentVersionId: assessmentVersion.id,
           organizationId: exam.organizationId,
           userId: candidate.id,
-          status: 'IN_PROGRESS',
+          status: 'AWAITING_CONSENT',
         },
       });
 

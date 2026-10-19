@@ -8,7 +8,6 @@ import { CandidateConsentController } from './controllers/candidate-consent.cont
 import { EvaluationFinalizeController } from './controllers/evaluation-finalize.controller';
 import { EvaluationSessionController } from './controllers/evaluation-session.controller';
 import { InvitationsController } from './controllers/invitations.controller';
-import { PsicometriaController } from './controllers/psicometria.controller';
 import { ReportsController } from './controllers/reports.controller';
 import { ResponsesController } from './controllers/responses.controller';
 import { AttemptRepository } from './repositories/attempt.repository';
@@ -23,7 +22,6 @@ import { FinalizeService } from './services/finalize.service';
 import { IgaCalculatorService } from './services/iga-calculator.service';
 import { InvitationService } from './services/invitation.service';
 import { ThetaCalculatorService } from './services/theta-calculator.service';
-import { CronCalibrationService } from './services/cron-calibration.service';
 import { PersonFitService } from './services/person-fit.service';
 import { CatService } from './services/cat.service';
 import { ItemSelectorService } from './services/item-selector.service';
@@ -40,7 +38,6 @@ import { SessionService } from './services/session.service';
 import { RateLimitGuard } from '../../shared/security/rate-limit.guard';
 import { RedisRateLimitStore } from '../../shared/security/redis-rate-limit.store';
 import { StorageModule } from '../storage/storage.module';
-import { CatController } from './controllers/cat.controller';
 
 @Module({
   imports: [
@@ -65,8 +62,6 @@ import { CatController } from './controllers/cat.controller';
     EvaluationSessionController,
     EvaluationFinalizeController,
     ReportsController,
-    PsicometriaController,
-    CatController,
   ],
   providers: [
     InvitationRepository,
@@ -84,7 +79,6 @@ import { CatController } from './controllers/cat.controller';
     ProctoringQueueProcessor,
     IgaCalculatorService,
     ThetaCalculatorService,
-    CronCalibrationService,
     PersonFitService,
     CatService,
     ItemSelectorService,
@@ -109,7 +103,6 @@ import { CatController } from './controllers/cat.controller';
     EvaluationQueueProducer,
     IgaCalculatorService,
     ThetaCalculatorService,
-    CronCalibrationService,
     PersonFitService,
     CatService,
     ItemSelectorService,

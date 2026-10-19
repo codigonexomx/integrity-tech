@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 ARG BACKEND_URL=http://backend:3001
-ARG NEXT_PUBLIC_API_BASE_URL=http://backend:3001/api
+ARG NEXT_PUBLIC_API_BASE_URL=
 ARG NEXT_PUBLIC_APP_ENV=production
 ARG NEXT_PUBLIC_APP_VERSION=1.0.0
 ARG NEXT_PUBLIC_BACKEND_VERSION=1.0.0
@@ -26,7 +26,7 @@ COPY src ./src
 RUN npm run build
 RUN npm prune --omit=dev
 
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

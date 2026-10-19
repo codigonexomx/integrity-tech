@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { INTEGRITY_LABORAL_ASSESSMENT_CODE, INTEGRITY_LABORAL_SCORING_REVISION } from '../../evaluations/integrity-laboral/integrity-laboral.definition';
 import { PrismaService } from '../../../shared/database/prisma.service';
 
 @Injectable()
@@ -27,6 +28,10 @@ export class EvaluationGovernanceResolverService {
       );
     }
 
+    const blueprint = version.blueprintJson || {};
+    if ((assessment.code === INTEGRITY_LABORAL_ASSESSMENT_CODE || blueprint.assessmentCode === INTEGRITY_LABORAL_ASSESSMENT_CODE) && blueprint.scoringRevision !== INTEGRITY_LABORAL_SCORING_REVISION) {
+      throw new BadRequestException('Versión de integridad retirada: publique una revisión corregida antes de crear intentos.');
+    }
     return version;
   }
 

@@ -14,7 +14,7 @@ export class InvitationRepository {
   findExamForInvitation(examId: string, organizationId: string) {
     return this.prisma.exam.findFirst({
       where: { id: examId, organizationId },
-      select: { id: true, title: true, organizationId: true },
+      select: { id: true, title: true, organizationId: true, durationMinutes: true },
     });
   }
 

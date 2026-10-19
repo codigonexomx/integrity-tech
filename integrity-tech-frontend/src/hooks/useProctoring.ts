@@ -42,6 +42,7 @@ export function useProctoring({ idleTimeoutMs = 60000 }: UseProctoringProps = {}
 
   // Helper para registrar eventos de proctoring de forma segura
   const logEvent = async (eventType: string, riskLevel: string, metadata: Record<string, any> = {}) => {
+    if (process.env.NEXT_PUBLIC_ENABLE_PROCTORING !== 'true') return;
     if (!attemptId || status !== 'IN_PROGRESS' || !syncEngine) return;
 
     sequenceRef.current += 1;
@@ -72,6 +73,7 @@ export function useProctoring({ idleTimeoutMs = 60000 }: UseProctoringProps = {}
   };
 
   useEffect(() => {
+    if (process.env.NEXT_PUBLIC_ENABLE_PROCTORING !== 'true') return;
     if (!attemptId || status !== 'IN_PROGRESS') return;
 
     // ============================================================================

@@ -1,6 +1,4 @@
 import { Injectable, Logger, ConflictException, NotFoundException } from '@nestjs/common';
-import { exec } from 'child_process';
-import * as path from 'path';
 import { PrismaService } from '../../../shared/database/prisma.service';
 
 @Injectable()
@@ -107,49 +105,7 @@ export class ContinuousNormingService {
   /**
    * Ejecuta el script de Python para calibrar las normas continuas suavizadas
    */
-  async runContinuousCalibration(testId: string): Promise<any> {
-    const scriptPath = path.resolve(__dirname, '../../../../scripts/continuous_norming.py');
-    const dbUrl = process.env.DATABASE_URL || 'postgresql://postgres:localpassword123@localhost:5432/integrity_tech_db';
-
-    // Seudonimizar la URL en los logs por seguridad
-    const safeDbUrl = dbUrl.replace(/:([^:@]+)@/, ':***@');
-    this.logger.log(`[Continuous Calibration] Ejecutando GAMLSS para ${testId}. URL DB: ${safeDbUrl}`);
-
-    const env = { ...process.env, DATABASE_URL: dbUrl };
-
-    return new Promise((resolve, reject) => {
-      exec(`python3 "${scriptPath}" "${testId}"`, { env }, (error, stdout, stderr) => {
-        if (error) {
-          this.logger.error(`Error al ejecutar continuous_norming.py: ${stderr || error.message}`);
-          return reject(new ConflictException(`Fallo en la calibración continua GAMLSS: ${stderr || error.message}`));
-        }
-
-        const lines = stdout.split('\n');
-        let capturing = false;
-        let jsonStr = '';
-
-        for (const line of lines) {
-          if (line.trim() === 'RESULT_START') {
-            capturing = true;
-            continue;
-          }
-          if (line.trim() === 'RESULT_END') {
-            capturing = false;
-            break;
-          }
-          if (capturing) {
-            jsonStr += line;
-          }
-        }
-
-        try {
-          const parsed = JSON.parse(jsonStr);
-          resolve(parsed);
-        } catch (jsonErr) {
-          this.logger.error(`Fallo al parsear JSON del script: ${jsonStr || stdout}`);
-          reject(new ConflictException('El script de baremación continua no devolvió un JSON válido.'));
-        }
-      });
-    });
+  async runContinuousCalibration(_testId: string): Promise<never> {
+    throw new ConflictException('Calibración continua deshabilitada: requiere validación científica y aislamiento por organización.');
   }
 }

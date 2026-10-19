@@ -8,7 +8,9 @@ import { PutPrivateObjectInput, PutPrivateObjectResult, StorageProvider } from '
 export class S3StorageProvider implements StorageProvider {
   readonly name = 's3' as const;
   private readonly bucket = process.env.STORAGE_S3_BUCKET || '';
-  private readonly client = new S3Client({
+  private clientInstance?: S3Client;
+  private get client(): S3Client {
+    return this.clientInstance ||= new S3Client({
     region: process.env.STORAGE_S3_REGION,
     endpoint: process.env.STORAGE_S3_ENDPOINT || undefined,
     forcePathStyle: Boolean(process.env.STORAGE_S3_ENDPOINT),
@@ -16,7 +18,8 @@ export class S3StorageProvider implements StorageProvider {
       accessKeyId: process.env.STORAGE_S3_ACCESS_KEY_ID || '',
       secretAccessKey: process.env.STORAGE_S3_SECRET_ACCESS_KEY || '',
     },
-  });
+    });
+  }
 
   async putObject(input: PutPrivateObjectInput): Promise<PutPrivateObjectResult> {
     await this.client.send(

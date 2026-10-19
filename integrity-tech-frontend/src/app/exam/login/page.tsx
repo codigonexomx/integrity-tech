@@ -4,255 +4,87 @@ import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { TopNavigation } from '../../../components/navigation/TopNavigation';
 import { apiClient, ApiClientError } from '../../../services/api-client';
-import type {
-  ClaimInvitationRequest,
-  ClaimInvitationResponse,
-  VerifyInvitationRequest,
-  VerifyInvitationResponse,
-} from '../../../generated/api/types';
-
-function getCandidateAccessErrorMessage(status: number, fallback: string) {
-  const messages: Record<number, string> = {
-    400: 'La clave de acceso no tiene un formato válido.',
-    401: 'La sesión no es válida. Vuelve a intentar desde tu enlace de evaluación.',
-    403: 'No tienes autorización para acceder a esta evaluación.',
-    409: 'La invitación ya no está disponible para iniciar un nuevo intento.',
-    429: 'Demasiados intentos con esta clave. Espera unos minutos antes de volver a intentar.',
-  };
-  return messages[status] || fallback;
-}
+import { candidateErrorMessage, rememberCandidateInvitation, resumableCandidateAttempt } from '../../../services/candidate-experience';
+import type { ClaimInvitationResponse, VerifyInvitationResponse, CandidateConsentResponse } from '../../../generated/api/types';
 
 export default function CandidateLoginPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans">
-        <TopNavigation />
-        <span className="w-8 h-8 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-      </div>
-    }>
-      <CandidateLoginForm />
-    </Suspense>
-  );
+  return <Suspense fallback={<main className="min-h-screen bg-slate-950 p-8 text-slate-100"><p role="status">Cargando acceso…</p></main>}><CandidateLoginForm /></Suspense>;
 }
 
 function CandidateLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  
   const [accessCode, setAccessCode] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [isClaiming, setIsClaiming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Datos del candidato verificado
-  const [invitationDetails, setInvitationDetails] = useState<{
-    candidateName: string;
-    email: string;
-    examId: string;
-    examTitle: string;
-  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [details, setDetails] = useState<(VerifyInvitationResponse & { verifiedCode: string }) | null>(null);
+  const [resume, setResume] = useState<{ attemptId: string; title: string } | null>(null);
 
-  // Leer código desde la URL (?code=IT-123456)
+  async function verify(value: string) {
+    const code = value.trim().toUpperCase();
+    setDetails(null); setResume(null); setError('');
+    if (!/^IT-\d{6}$/.test(code)) { setError('Introduce la clave completa, por ejemplo IT-123456.'); return; }
+    setBusy(true);
+    try {
+      const attemptId = resumableCandidateAttempt(code);
+      if (attemptId) {
+        const consent = await apiClient.get<CandidateConsentResponse>(`/evaluations/attempts/${attemptId}/consent`);
+        setResume({ attemptId, title: consent.evaluation?.title || 'Evaluación asignada' });
+      } else {
+        const data = await apiClient.post<VerifyInvitationResponse>('/evaluations/invitations/verify', { accessCode: code }, { auth: false });
+        setDetails({ ...data, verifiedCode: code });
+      }
+    } catch (e) {
+      setError(e instanceof ApiClientError && [400, 409].includes(e.status)
+        ? 'La clave no está disponible. Revisa que sea correcta. Si ya comenzaste en otro navegador, contacta a la organización que te invitó para recuperar el acceso.'
+        : candidateErrorMessage(e));
+    } finally { setBusy(false); }
+  }
+
   useEffect(() => {
     const code = searchParams.get('code');
-    if (code) {
-      setAccessCode(code);
-      handleVerify(code);
-    }
+    if (code) { setAccessCode(code); void verify(code); }
   }, [searchParams]);
 
-  // Verificar el código ingresado contra el backend
-  const handleVerify = async (codeToVerify?: string) => {
-    const code = codeToVerify || accessCode;
-    if (!code || code.trim() === '') {
-      setError('Por favor, ingresa una clave de acceso válida.');
-      return;
-    }
-
-    setIsVerifying(true);
-    setError(null);
-
+  async function claim() {
+    if (!details) return;
+    setBusy(true); setError('');
     try {
-      const payload: VerifyInvitationRequest = { accessCode: code };
-      const data = await apiClient.post<VerifyInvitationResponse>('/evaluations/invitations/verify', payload, { auth: false });
-      setInvitationDetails(data);
-    } catch (err: any) {
-      console.error(err);
-      const fallback = err.message || 'La clave de acceso ingresada es incorrecta o ya fue utilizada.';
-      setError(err instanceof ApiClientError ? getCandidateAccessErrorMessage(err.status, fallback) : fallback);
-      setInvitationDetails(null);
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  // Reclamar la clave e iniciar el examen
-  const handleClaim = async () => {
-    if (!invitationDetails) return;
-
-    setIsClaiming(true);
-    setError(null);
-
-    try {
-      const payload: ClaimInvitationRequest = {
-        accessCode: searchParams.get('code') || accessCode,
-        candidateName: invitationDetails.candidateName,
-        email: invitationDetails.email,
-      };
-      const data = await apiClient.post<ClaimInvitationResponse>('/evaluations/invitations/claim', payload, { auth: false });
-      
-      // Guardar el Token de Sesión JWT en localStorage para el header
-      localStorage.setItem('auth-token', data.token);
-
-      // Redirigir al examen del alumno
+      const data = await apiClient.post<ClaimInvitationResponse>('/evaluations/invitations/claim', {
+        accessCode: details.verifiedCode, candidateName: details.candidateName, email: details.email,
+      }, { auth: false });
+      localStorage.setItem(`candidate-token:${data.attemptId}`, data.token);
+      rememberCandidateInvitation(details.verifiedCode, data.attemptId);
       router.push(`/exam/${data.attemptId}`);
-    } catch (err: any) {
-      console.error(err);
-      const fallback = err.message || 'Fallo al iniciar el examen. Por favor, reintenta.';
-      setError(err instanceof ApiClientError ? getCandidateAccessErrorMessage(err.status, fallback) : fallback);
-    } finally {
-      setIsClaiming(false);
-    }
-  };
+    } catch (e) {
+      setError(e instanceof ApiClientError && [400, 409].includes(e.status)
+        ? 'No pudimos iniciar con esta clave. Vuelve a verificarla o contacta a la organización que te invitó.' : candidateErrorMessage(e));
+    } finally { setBusy(false); }
+  }
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-6 pt-20 text-center font-sans gap-8">
-      <TopNavigation />
-      
-      {/* HEADER LOGO */}
-      <div className="flex flex-col items-center gap-3">
-        <img 
-          src="/integrity-logo-2.png" 
-          alt="Integrity Test Logo" 
-          className="w-24 sm:w-28 h-auto object-contain hover:scale-105 transition-all duration-300"
-        />
-        <div className="flex flex-col items-center select-none mt-1">
-          <h1 className="text-2xl font-light tracking-[0.2em] bg-gradient-to-r from-amber-100 via-yellow-300 to-amber-500 bg-clip-text text-transparent uppercase font-sans">
-            Integrity
-          </h1>
-          <h2 className="text-sm font-light tracking-[0.3em] text-slate-300 uppercase font-sans mt-1">
-            - Test -
-          </h2>
-        </div>
-        <p className="text-2xs text-slate-400 max-w-xs leading-relaxed mt-1">
-          Acceso seguro a evaluaciones psicométricas bajo supervisión forense de conducta.
-        </p>
-      </div>
-
-      {/* LOGIN CARD */}
-      <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-md w-full shadow-2xl flex flex-col gap-6 relative overflow-hidden">
-        
-        {/* EFECTO CRISTAL DETRÁS */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full filter blur-2xl pointer-events-none" />
-        
-        {!invitationDetails ? (
-          // PASO 1: INGRESAR CÓDIGO
-          <div className="flex flex-col gap-5">
-            <div className="text-left">
-              <h2 className="text-lg font-bold text-white">Puerta de Acceso</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Ingresa la clave de acceso de 6 dígitos provista por tu reclutador o en tu invitación por correo.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-2xs font-bold text-slate-500 uppercase tracking-widest">
-                Clave de Acceso
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: IT-123456"
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-base font-semibold tracking-wider text-center text-slate-200 placeholder-slate-700 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600/20 transition-all uppercase"
-              />
-            </div>
-
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs py-2.5 px-3 rounded-lg text-left leading-relaxed">
-                ⚠️ {error}
-              </div>
-            )}
-
-            <button
-              onClick={() => handleVerify()}
-              disabled={isVerifying}
-              className="w-full py-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-2"
-            >
-              {isVerifying ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  Verificando...
-                </>
-              ) : (
-                'Verificar Acceso'
-              )}
-            </button>
-          </div>
-        ) : (
-          // PASO 2: CONFIRMAR DATOS DEL EXAMEN
-          <div className="flex flex-col gap-6">
-            <div className="text-left border-b border-slate-800/60 pb-4">
-              <h2 className="text-lg font-bold text-white">Evaluación Encontrada</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Confirma tus datos antes de iniciar la prueba. Al presionar comenzar, se consumirá tu clave de acceso.
-              </p>
-            </div>
-
-            {/* DETALLES DE LA INVITACION */}
-            <div className="flex flex-col gap-3.5 bg-slate-950/60 p-4 border border-slate-950 rounded-xl text-left">
-              <div>
-                <span className="text-4xs font-bold text-slate-500 uppercase tracking-widest block">Evaluado</span>
-                <span className="text-sm font-semibold text-slate-200 block mt-0.5">{invitationDetails.candidateName}</span>
-                <span className="text-xs text-slate-500 block mt-0.5">{invitationDetails.email}</span>
-              </div>
-              <div className="border-t border-slate-900 pt-3">
-                <span className="text-4xs font-bold text-slate-500 uppercase tracking-widest block">Prueba Asignada</span>
-                <span className="text-sm font-bold text-indigo-400 block mt-0.5">{invitationDetails.examTitle}</span>
-              </div>
-            </div>
-
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs py-2.5 px-3 rounded-lg text-left">
-                ⚠️ {error}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setInvitationDetails(null);
-                  setError(null);
-                }}
-                className="flex-1 py-3 rounded-xl border border-slate-800 text-slate-400 text-xs font-semibold hover:bg-slate-900 transition-colors cursor-pointer"
-              >
-                Volver
-              </button>
-              <button
-                onClick={handleClaim}
-                disabled={isClaiming}
-                className="flex-1 py-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-2"
-              >
-                {isClaiming ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    Iniciando...
-                  </>
-                ) : (
-                  'Comenzar Examen'
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* METADATOS TÉCNICOS */}
-      <div className="text-4xs text-slate-600 font-mono flex flex-col gap-0.5 leading-relaxed">
-        <div>Servicio de Autenticación mediante Claves Criptográficas de Un Solo Uso (OTP)</div>
-        <div>Session Binding: IP e Identidad en Proctoring Forense</div>
-      </div>
-
-    </div>
-  );
+  return <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-5 pt-20 font-sans [&_button:focus-visible]:outline [&_button:focus-visible]:outline-2 [&_button:focus-visible]:outline-offset-4 [&_button:focus-visible]:outline-indigo-300">
+    <TopNavigation />
+    <section className="w-full max-w-lg space-y-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 sm:p-8">
+      <header><p className="text-sm text-indigo-300">Código Nexo · Integrity Tech</p><h1 className="mt-2 text-2xl font-bold">Acceso a tu evaluación</h1><p className="mt-2 text-sm text-slate-300">Demostración con prácticas ficticias. No determina aptitud laboral.</p></header>
+      {error && <p role="alert" className="rounded-lg border border-amber-600 bg-amber-950 p-4 text-amber-100">{error}</p>}
+      {resume ? <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Puedes continuar en este navegador</h2><p>{resume.title}</p>
+        <p className="text-sm text-slate-300">Recupera el intento que ya abriste. Si ya entregaste, verás su confirmación; no se iniciará otro intento.</p>
+        <button onClick={() => router.push(`/exam/${resume.attemptId}`)} className="min-h-11 rounded-lg bg-indigo-600 px-5 py-3">Reanudar o ver entrega</button>
+        <button onClick={() => { setResume(null); setError(''); }} className="ml-2 min-h-11 rounded-lg border border-slate-600 px-4 py-3">Usar otra clave</button>
+      </div> : details ? <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Confirma tu invitación</h2>
+        <div className="rounded-lg bg-slate-950 p-4"><p className="font-semibold">{details.candidateName}</p><p className="text-sm text-slate-300">{details.email}</p><p className="mt-3">{details.examTitle}</p></div>
+        <p className="text-sm text-slate-300">Dispondrás de {details.durationMinutes || 10} minutos para responder. Primero podrás leer el aviso: el tiempo empieza al aceptar e iniciar, no al abrir este enlace.</p>
+        <p className="text-sm text-slate-300">Si estos datos no son tuyos, vuelve y revisa la clave antes de continuar.</p>
+        <div className="flex flex-wrap gap-3"><button disabled={busy} onClick={() => { setDetails(null); setError(''); }} className="min-h-11 rounded-lg border border-slate-600 px-5 py-3">Volver</button><button disabled={busy} onClick={() => void claim()} className="min-h-11 rounded-lg bg-indigo-600 px-5 py-3 disabled:opacity-50">{busy ? 'Abriendo…' : 'Continuar al aviso'}</button></div>
+      </div> : <form onSubmit={event => { event.preventDefault(); void verify(accessCode); }} className="space-y-4">
+        <label htmlFor="candidate-access-code" className="block text-sm font-semibold">Clave de acceso</label>
+        <p id="access-instructions" className="text-sm text-slate-300">Introduce la clave completa que te compartió la organización, incluido IT-.</p>
+        <input id="candidate-access-code" aria-describedby="access-instructions" autoComplete="off" autoCapitalize="characters" spellCheck={false} placeholder="Ej: IT-123456" value={accessCode} onChange={e => { setAccessCode(e.target.value); setDetails(null); setResume(null); setError(''); }} className="min-h-12 w-full rounded-lg border border-slate-600 bg-slate-950 p-3 text-base uppercase focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+        <button type="submit" disabled={busy} className="min-h-11 w-full rounded-lg bg-indigo-600 px-5 py-3 disabled:opacity-50">{busy ? 'Verificando…' : error ? 'Reintentar' : 'Verificar Acceso'}</button>
+      </form>}
+      <aside className="space-y-2 border-t border-slate-700 pt-4 text-sm text-slate-300"><p>Sin cámara ni monitoreo de navegación.</p><p>¿Necesitas ayuda? Contacta a la organización por el mismo medio en que recibiste la invitación. Si ya comenzaste, usa este mismo navegador y no borres sus datos.</p></aside>
+    </section>
+  </main>;
 }

@@ -4,7 +4,7 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 
 let sdkStarted = false;
 
-if (process.env.OTEL_ENABLED !== 'false' && !sdkStarted) {
+if (process.env.OTEL_ENABLED === 'true' && !sdkStarted) {
   const traceExporter = process.env.OTEL_EXPORTER_OTLP_ENDPOINT
     ? new OTLPTraceExporter({
         url: `${process.env.OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, '')}/v1/traces`,

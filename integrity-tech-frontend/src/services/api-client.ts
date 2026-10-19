@@ -5,8 +5,10 @@ type ApiRequestOptions = RequestInit & {
   auth?: boolean;
 };
 
-function readStoredAuthToken() {
+function readStoredAuthToken(path: string) {
   if (typeof window === 'undefined') return '';
+  const candidateAttempt = path.match(/\/evaluations\/attempts\/([^/]+)\/(?:session|consent|submit|finalize|feedback|snapshots)(?:$|\?)/)?.[1];
+  if (candidateAttempt) return localStorage.getItem(`candidate-token:${candidateAttempt}`) || localStorage.getItem('auth-token') || '';
   return localStorage.getItem('auth-token') || '';
 }
 
@@ -96,7 +98,7 @@ function defaultErrorMessage(status: number) {
   return messages[status] || 'No se pudo completar la solicitud.';
 }
 
-function buildHeaders(options: ApiRequestOptions) {
+function buildHeaders(options: ApiRequestOptions, path: string) {
   const headers = new Headers(options.headers);
   const hasBody = options.body !== undefined && options.body !== null;
   if (hasBody && !headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -104,7 +106,7 @@ function buildHeaders(options: ApiRequestOptions) {
   }
 
   if (options.auth !== false) {
-    const token = options.token ?? readStoredAuthToken();
+    const token = options.token ?? readStoredAuthToken(path);
     if (token && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
     }
@@ -115,9 +117,15 @@ function buildHeaders(options: ApiRequestOptions) {
 
 export async function apiRawRequest(path: string, options: ApiRequestOptions = {}) {
   const { token: _token, auth: _auth, ...fetchOptions } = options;
-  return fetch(normalizePath(path), {
+  // Authenticated reads must never reuse an earlier identity or attempt snapshot,
+  // including browsers/proxies that retain a response despite cache directives.
+  const url = normalizePath(path);
+  const readUrl = !fetchOptions.method || fetchOptions.method === 'GET'
+    ? `${url}${url.includes('?') ? '&' : '?'}_request=${crypto.randomUUID()}` : url;
+  return fetch(readUrl, {
     ...fetchOptions,
-    headers: buildHeaders(options),
+    cache: 'no-store',
+    headers: buildHeaders(options, path),
   });
 }
 
