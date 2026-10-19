@@ -131,7 +131,7 @@ jobs:
 
   e2e:
     name: Enterprise E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - backend
       - frontend
@@ -286,7 +286,10 @@ jobs:
           cat .ci-logs/backend-smoke.log || true
 
       - name: Install PostgreSQL client tools
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
 
       - name: Backup and restore smoke validation
         working-directory: integrity-tech-backend
