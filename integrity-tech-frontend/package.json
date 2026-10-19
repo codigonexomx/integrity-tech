@@ -12,7 +12,8 @@
     "test:deployment-config": "node --test tests/deployment-config.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test:candidate-experience": "node --test tests/candidate-experience.test.mjs"
   },
   "dependencies": {
     "crypto-js": "^4.2.0",

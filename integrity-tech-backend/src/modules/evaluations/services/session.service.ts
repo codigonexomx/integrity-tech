@@ -29,7 +29,7 @@ export class SessionService {
       throw new NotFoundException('Intento de examen no encontrado.');
     }
 
-    if (!['IN_PROGRESS', 'SUBMITTED', 'COMPLETED', 'EXPIRED'].includes(attempt.status)) {
+    if (!['AWAITING_CONSENT', 'IN_PROGRESS', 'SUBMITTED', 'COMPLETED', 'EXPIRED'].includes(attempt.status)) {
       throw new BadRequestException('El intento no se encuentra disponible para el candidato.');
     }
 

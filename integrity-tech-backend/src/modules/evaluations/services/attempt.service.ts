@@ -16,7 +16,7 @@ export class AttemptService {
       const user = await this.attempts.findUserInTenant(att.userId, organizationId);
       const exam = await this.attempts.findExamInTenant(att.examId, organizationId);
       const expired = att.status === 'EXPIRED' || (att.status === 'IN_PROGRESS' && Date.now() >= att.startedAt.getTime() + (exam?.durationMinutes || 10) * 60_000);
-      const statusLabel = att.status === 'COMPLETED' ? 'Completado' : expired ? 'Tiempo terminado · incompleto' : att.status === 'SUBMITTED' ? 'Pendiente de revisión' : 'En curso';
+      const statusLabel = att.status === 'COMPLETED' ? 'Completado' : expired ? 'Tiempo terminado · incompleto' : att.status === 'SUBMITTED' ? 'Pendiente de revisión' : att.status === 'AWAITING_CONSENT' ? 'Pendiente de inicio' : 'En curso';
 
       result.push({
         id: att.id,

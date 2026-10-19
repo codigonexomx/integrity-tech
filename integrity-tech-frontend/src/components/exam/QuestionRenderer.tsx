@@ -1,6 +1,7 @@
 import React from 'react';
 import { useExamStore } from '../../store/exam.store';
 import { syncEngine } from '../../services/sync-engine';
+import { saveCandidateAnswer } from '../../services/candidate-experience';
 import type { QuestionDto } from '../../types/exam-contract';
 
 export interface QuestionProps {
@@ -12,6 +13,7 @@ export const QuestionRenderer: React.FC<QuestionProps> = ({ question }) => {
   const currentResponse = useExamStore((state) => state.answers[question.id]);
   const setAnswerStore = useExamStore((state) => state.setAnswer);
   const attemptId = useExamStore((state) => state.attemptId);
+  const [saveError, setSaveError] = React.useState('');
 
   const startTimeRef = React.useRef(Date.now());
 
@@ -20,6 +22,14 @@ export const QuestionRenderer: React.FC<QuestionProps> = ({ question }) => {
   }, [question.id]);
 
   const handleResponseChange = async (responseValue: any) => {
+    try {
+      if (!attemptId) throw new Error('No active attempt');
+      saveCandidateAnswer(attemptId, question.id, responseValue);
+      setSaveError('');
+    } catch {
+      setSaveError('No pudimos guardar esta selección en el navegador. No cierres esta página y contacta a la organización que te invitó.');
+      return;
+    }
     // 1. Actualizar el estado en memoria de Zustand de forma inmediata (reactividad fluida)
     setAnswerStore(question.id, responseValue);
 
@@ -39,15 +49,16 @@ export const QuestionRenderer: React.FC<QuestionProps> = ({ question }) => {
   switch (question.type) {
     case 'MULTIPLE_CHOICE':
       return (
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-xl shadow-lg transition-all duration-300">
-          <h3 className="text-lg font-medium text-slate-100 mb-4">{question.content.text}</h3>
+        <div role="radiogroup" aria-labelledby={`question-title-${question.id}`} className="p-6 bg-slate-900 border border-slate-800 rounded-xl shadow-lg transition-all duration-300">
+          {saveError && <p role="alert" className="mb-4 rounded-lg border border-amber-500 p-3 text-amber-200">{saveError}</p>}
+          <h3 id={`question-title-${question.id}`} className="text-lg font-medium text-slate-100 mb-4">{question.content.text}</h3>
           <div className="space-y-3">
             {question.content.options?.map((option) => {
               const isSelected = currentResponse?.selectedOptionId === option.id;
               return (
                 <label
                   key={option.id}
-                  className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all duration-200 hover:bg-slate-800/50 ${
+                  className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer focus-within:ring-2 focus-within:ring-indigo-300 focus-within:ring-offset-2 focus-within:ring-offset-slate-950 transition-all duration-200 hover:bg-slate-800/50 ${
                     isSelected 
                       ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400' 
                       : 'border-slate-800 bg-slate-950 text-slate-400'

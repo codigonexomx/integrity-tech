@@ -44,7 +44,7 @@ export function FeedbackLayer({ attemptId, onFeedbackSubmitted }: FeedbackLayerP
       }
     } catch (error: any) {
       console.warn('[Feedback Layer] No se pudo registrar la retroalimentación:', error);
-      setErrorMessage('No pudimos registrar tu feedback. Revisa tu conexión e inténtalo nuevamente.');
+      setErrorMessage('No pudimos registrar tu opinión. Revisa tu conexión e inténtalo nuevamente.');
       setIsSubmitting(false);
     }
   };
@@ -55,9 +55,9 @@ export function FeedbackLayer({ attemptId, onFeedbackSubmitted }: FeedbackLayerP
         <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-3xl">
           💖
         </div>
-        <h3 className="text-lg font-bold text-white">¡Muchas gracias por tu feedback!</h3>
+        <h3 className="text-lg font-bold text-white">¡Gracias por tu opinión!</h3>
         <p className="text-xs text-slate-400">
-          Tu opinión nos ayuda a perfeccionar la fiabilidad y el rendimiento técnico de la plataforma.
+          Tu evaluación ya estaba entregada. Esta opinión nos ayuda a mejorar la experiencia.
         </p>
       </div>
     );
@@ -66,9 +66,9 @@ export function FeedbackLayer({ attemptId, onFeedbackSubmitted }: FeedbackLayerP
   return (
     <div className="bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl max-w-lg w-full mx-auto my-auto flex flex-col gap-6 animate-slide-up">
       <div className="text-center">
-        <h2 className="text-lg font-bold text-white tracking-wide">¿Cómo fue tu experiencia técnica hoy?</h2>
+        <h2 className="text-lg font-bold text-white tracking-wide">¿Cómo fue tu experiencia al responder?</h2>
         <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-          Nos ayuda a validar la fluidez del examen y asegurar que el motor de sincronización responda correctamente.
+          Esta encuesta es opcional y no cambia tus respuestas ni tu resultado.
         </p>
       </div>
 
@@ -76,15 +76,16 @@ export function FeedbackLayer({ attemptId, onFeedbackSubmitted }: FeedbackLayerP
         {/* ESCALA NPS (0 al 10) */}
         <div className="flex flex-col gap-3">
           <label className="text-xs font-semibold text-slate-400">
-            Califica el rendimiento técnico global de la plataforma (0: Pésimo, 10: Excelente):
+            Califica tu experiencia (0: Muy mala, 10: Muy buena):
           </label>
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 justify-center">
+          <div role="group" aria-label="Calificación de la experiencia, de 0 a 10" className="grid grid-cols-4 sm:grid-cols-6 gap-2 justify-center">
             {Array.from({ length: 11 }, (_, i) => i).map((score) => {
               const isSelected = npsScore === score;
               return (
                 <button
                   key={score}
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => setNpsScore(score)}
                   className={`min-h-11 w-full rounded-lg border font-mono font-bold text-xs flex items-center justify-center transition-all cursor-pointer ${
                     isSelected
@@ -102,21 +103,22 @@ export function FeedbackLayer({ attemptId, onFeedbackSubmitted }: FeedbackLayerP
             })}
           </div>
           <div className="flex justify-between text-3xs font-medium text-slate-500 px-1">
-            <span>Detractor (0-6)</span>
-            <span>Pasivo (7-8)</span>
-            <span>Promotor (9-10)</span>
+            <span>Muy mala (0)</span>
+
+            <span>Muy buena (10)</span>
           </div>
         </div>
 
         {/* COMENTARIO CUALITATIVO */}
         {npsScore !== null && (
           <div className="flex flex-col gap-2 animate-fade-in">
-            <label className="text-xs font-semibold text-slate-400">
-              {npsScore <= 6 
-                ? '¿Qué fallos técnicos, lentitud o incidencias experimentaste? (Opcional):' 
-                : '¿Qué podríamos mejorar para que tu experiencia sea aún más fluida? (Opcional):'}
+            <label htmlFor="candidate-feedback" className="text-xs font-semibold text-slate-400">
+              {npsScore <= 6
+                ? '¿Qué dificultad encontraste al responder? (Opcional):'
+                : '¿Qué podríamos mejorar? (Opcional):'}
             </label>
             <textarea
+              id="candidate-feedback"
               value={feedbackText}
               onChange={(e) => setFeedbackText(e.target.value)}
               placeholder="Detalla tu experiencia aquí..."

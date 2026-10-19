@@ -83,7 +83,7 @@ jobs:
         run: npm run test:sync-engine
 
       - name: API client and deployment config tests
-        run: npm run test:api-client && npm run test:deployment-config
+        run: npm run test:api-client && npm run test:deployment-config && npm run test:candidate-experience
 
       - name: Build
         run: npm run build

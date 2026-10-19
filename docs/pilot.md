@@ -92,3 +92,22 @@ Solo después de validar el recorrido y la recuperación. Punto de partida para 
 En `.env.pilot` configurar `PILOT_DOMAIN` a un dominio propio, `PILOT_ORIGIN=https://ese-dominio`, `PILOT_BIND_IP=0.0.0.0`, `PILOT_HTTP_PORT=80`, `PILOT_HTTPS_PORT=443`; cambiar correo de administración **antes del primer bootstrap**. Abrir solo 80/443 y el acceso administrativo restringido. Mantener DB/Redis privados. El DNS debe apuntar al servidor para emitir certificado. No habilitar cámara ni analítica experimental.
 
 Antes de la primera invitación real: probar restauración en una instalación aislada; comprobar el dominio y la sesión desde un móvil; ejecutar evaluación de referencia; revisar aislamiento entre organizaciones; limitar el primer grupo y medir fallos y soporte. Esta configuración no promete alta disponibilidad: una sola máquina es un punto de falla.
+
+
+## Demo local del candidato revisada el 19 de octubre de 2026
+
+La migración `20261019000000_candidate_consent_start` agrega `AWAITING_CONSENT`. Abrir una invitación reserva el intento, pero su tiempo comienza en la primera aceptación del aviso. Reintentar la aceptación no amplía el plazo. Las vistas muestran “Pendiente de inicio” antes de aceptar. Usar migraciones antes de iniciar el backend actualizado.
+
+El acceso reclama exactamente la clave verificada; el servidor rechaza sustituir la identidad de la invitación. El enlace original ofrece reanudar únicamente cuando este mismo navegador conserva una sesión válida; otro navegador necesita recuperación asistida, no reutilización de la clave.
+
+Las respuestas del intento tienen copia local inmediata y cola durable, para recuperarse incluso si se navega antes de terminar un guardado. Son datos privados del navegador: no borrar su almacenamiento durante una evaluación ni usar personas reales en esta demo. La entrega requiere confirmación del servidor y una pantalla de revisión previa.
+
+Para presentar por pantalla compartida desde el equipo local, con los contenedores activos:
+
+```sh
+node scripts/preview-pilot.mjs
+```
+
+Abrir `http://127.0.0.1:8765/exam/login` o `/staff/login`. La vista previa solo se enlaza a loopback, valida el TLS del servicio local y rechaza otros orígenes; no ofrece un enlace público. Ctrl+C la cierra. Crear una invitación ficticia nueva para cada demostración. La guía comercial interna contiene el guion actualizado.
+
+Evidencia resumida: `docs/evidence/candidate-demo-2026-10-19.json`. Aprobados localmente: 178 pruebas de backend, 4 de integración, 13 de frontend y 19 recorridos de navegador, además de 8 comprobaciones de recuperación. Esto habilita una demo local guiada; no sustituye aceptación remota ni las condiciones necesarias para candidatos reales.

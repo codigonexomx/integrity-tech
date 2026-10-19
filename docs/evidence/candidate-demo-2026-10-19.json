@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-19",
+  "scope": "local_demo_with_fictitious_data_only",
+  "candidateIdentityBoundToVerifiedInvitation": true,
+  "atomicSingleInvitationClaim": true,
+  "timerStartsOnFirstConsentOnly": true,
+  "sameBrowserResume": true,
+  "immediateNavigationAnswerRecovery": true,
+  "queueDrainAndStaleSessionRecovery": true,
+  "friendlyRetryAndAccessRecovery": true,
+  "persistedQuestionPosition": true,
+  "deliveryReviewAndStableCompletion": true,
+  "keyboardFocusAndLabels": true,
+  "optionalPlainLanguageFeedback": true,
+  "mobileViewport390x844": true,
+  "backendUnitTests": 178,
+  "integrationTests": 4,
+  "frontendUnitTests": 13,
+  "browserE2ETests": 19,
+  "totalTests": 214,
+  "fullRecoveryChecks": 8,
+  "productionImagesBuilt": true,
+  "mainLocalDemoUpdated": true,
+  "mainScoreChecks": [
+    3,
+    0
+  ],
+  "remoteHostingPurchased": false,
+  "externalMessagesSent": 0,
+  "publicDeploymentPerformed": false,
+  "newChangesPushedToGitHub": false
+}

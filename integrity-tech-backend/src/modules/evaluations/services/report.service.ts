@@ -101,7 +101,7 @@ export class ReportService {
       email: candidate?.email || 'No disponible',
       assessmentTitle: exam?.title || 'No disponible',
       date: att.submittedAt ? att.submittedAt.toISOString() : att.startedAt.toISOString(),
-      overallScore: integrityProfile?.usable === false ? 'Resultado retirado' : (att.status === 'EXPIRED' || (att.status === 'IN_PROGRESS' && Date.now() >= att.startedAt.getTime() + ((exam as any)?.durationMinutes || 10) * 60_000)) ? 'Sin puntuación · tiempo terminado con preguntas pendientes' : att.status === 'SUBMITTED' ? 'Pendiente de revisión' : att.status !== 'COMPLETED' ? 'Pendiente de entrega' : att.score !== null && att.score !== undefined ? `${att.score} puntos (suma de reactivos)` : 'No disponible',
+      overallScore: integrityProfile?.usable === false ? 'Resultado retirado' : (att.status === 'EXPIRED' || (att.status === 'IN_PROGRESS' && Date.now() >= att.startedAt.getTime() + ((exam as any)?.durationMinutes || 10) * 60_000)) ? 'Sin puntuación · tiempo terminado con preguntas pendientes' : att.status === 'SUBMITTED' ? 'Pendiente de revisión' : att.status === 'AWAITING_CONSENT' ? 'Pendiente de inicio' : att.status !== 'COMPLETED' ? 'Pendiente de entrega' : att.score !== null && att.score !== undefined ? `${att.score} puntos (suma de reactivos)` : 'No disponible',
       ipAddress: att.ipAddress || 'No disponible',
       userAgent: att.userAgent || 'No disponible',
       sessionHmac: att.ltiMapping ? `lti-${att.ltiMapping.id}` : null,

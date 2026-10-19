@@ -99,6 +99,7 @@ export type VerifyInvitationResponse = {
   email: string;
   examId: string;
   examTitle: string;
+  durationMinutes?: number;
 };
 
 export type ClaimInvitationRequest = {
@@ -156,6 +157,7 @@ export type CandidateConsentResponse = {
   accepted: boolean;
   consentVersion?: string | null;
   acceptedAt?: string | null;
+  evaluation?: { title: string; durationMinutes: number; questionCount: number };
 };
 
 export type AttemptListItem = {

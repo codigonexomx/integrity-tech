@@ -74,10 +74,10 @@ try {
     // can include stopped project services in its health wait; up --no-deps
     // scopes readiness to this batch and does not rerun migrations.
     phase = 'restart-redis';
-    if (restart.includes('redis')) run('docker', [...compose, 'up', '-d', '--no-build', '--no-deps', '--wait', 'redis']);
+    if (restart.includes('redis')) run('docker', [...compose, 'up', '-d', '--no-build', '--no-deps', '--no-recreate', '--wait', 'redis']);
     const apps = restart.filter(s => s !== 'redis');
     phase = 'restart-applications';
-    if (apps.length) run('docker', [...compose, 'up', '-d', '--no-build', '--no-deps', '--wait', ...apps]);
+    if (apps.length) run('docker', [...compose, 'up', '-d', '--no-build', '--no-deps', '--no-recreate', '--wait', ...apps]);
   } catch (error) {
     console.error(`backup-phase: ${phase}`);
     throw error;
